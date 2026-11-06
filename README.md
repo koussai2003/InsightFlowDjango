@@ -1,6 +1,6 @@
 # InsightFlow
 
-InsightFlow is a proposed web platform for data scientists to import CSV datasets, inspect data quality, preview and apply cleaning steps, keep dataset versions, explore data, evaluate classification models, and review results with teammates. The project is in planning; the platform has not yet been implemented.
+InsightFlow is a planned data science workspace for cleaning, versioning and evaluating CSV datasets. The first implementation covers registration and role-based access with FastAPI, Vue and Supabase PostgreSQL. See [account setup and tests](docs/accounts.md) to run it.
 
 ## Planned workflow
 
