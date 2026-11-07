@@ -1,6 +1,6 @@
 # InsightFlow
 
-InsightFlow is a planned data science workspace for cleaning, versioning and evaluating CSV datasets. The first implementation covers registration and role-based access with FastAPI, Vue and Supabase PostgreSQL. See [account setup and tests](docs/accounts.md) to run it.
+InsightFlow is a planned data science workspace for cleaning, versioning and evaluating CSV datasets. The first implementation covers registration and role-based access with FastAPI, Vue and Supabase Auth and PostgreSQL. See [account setup and tests](docs/accounts.md) to run it.
 
 ## Planned workflow
 

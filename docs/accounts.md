@@ -1,53 +1,39 @@
-# Running the account workflow
+# Supabase Auth account workflow
 
-IF-8 and IF-11 use FastAPI, Vue and Supabase PostgreSQL. FastAPI owns password verification and sessions. The browser calls the API on its own origin. Public signup creates a data scientist account. A reviewer can enter the review workspace, a data scientist can enter dataset preparation, and an administrator can list users and change roles. Dataset processing and reviews belong to later stories.
+The running app uses Supabase Auth for passwords, signup verification and email tokens. Application roles are stored in private `insightflow.auth_profiles` rows keyed by the Supabase user UUID. Legacy custom account tables are not used by the application and have not been migrated or deleted.
 
-## Configure the database
+## Configuration
 
-In the team's Supabase dashboard, choose **Connect**, then copy the direct PostgreSQL connection URI (or session pooler URI for an IPv4 host). Set the server environment variable `DATABASE_URL` to that URI with the password URL-encoded and SSL enabled. For example:
+Set these values in the ignored root `.env` file:
 
-    postgresql://USERNAME:PASSWORD@HOST:5432/postgres?sslmode=require
+- `DATABASE_URL`: Session pooler URI, URL-encoded password, `sslmode=require`.
+- `SUPABASE_URL`: project API URL.
+- `SUPABASE_PUBLISHABLE_KEY`: project publishable API key.
 
-Apply the setup with an account that owns the application's private schema and tables. Prefer a dedicated application schema owner with only the necessary database privileges. Keep the `insightflow` schema private in the Supabase Data API settings. Credentials and session hashes belong only on the API server.
+In Supabase Authentication enable Confirm email and Secure email change. Set Site URL to `http://127.0.0.1:8018` for the local demo. Use the deployed HTTPS URL for a public deployment.
 
-## Start the app
+The built-in email sender is limited to organization team addresses and a low email rate. The current dashboard requires custom SMTP to edit email templates. Its default signup template sends a confirmation link. The app handles that link and also provides code entry for templates containing `{{ .Token }}`. Custom SMTP is required for general public registrations and to customize signup, Magic link/OTP, and Change email templates to show codes. Email-code account changes cannot be demonstrated with link-only templates.
 
-Use Python 3.11+ and Node 22+. In an activated Python virtual environment at the repository root:
+## Start
 
     python -m pip install -r requirements.txt
     python manage_accounts.py init
-    python manage_accounts.py create-admin admin@example.com
     npm --prefix web ci
     npm --prefix web run build
-    python -m uvicorn accounts:app
+    python start_app.py
 
-The admin command prompts for a password and only creates a new account. Use a separate email to try public registration. For local HTTP on loopback, set `INSIGHTFLOW_LOCAL_HTTP=1` before starting the server. Visit http://127.0.0.1:8000. Use HTTPS with the default secure cookie setting when deploying. For frontend development, start the API and run `npm --prefix web run dev` in a second terminal.
+Visit http://127.0.0.1:8018. Register, open the confirmation email, and follow its link. Alternatively enter the code if configured in the email template. No application profile or session is created before email verification. To bootstrap an administrator after registration and verification:
 
-## Verify the stories
+    python manage_accounts.py promote-admin admin@example.com
 
-Run the integration tests against a dedicated, disposable PostgreSQL database. They initialize the schema and create test users. Set `INSIGHTFLOW_TEST_DATABASE_URL` to that database's URI, then run:
+Public signups always receive the data scientist role. Roles are never taken from editable user metadata. Sessions use HttpOnly cookies, expire within one hour, and require a valid Supabase user and non-revoked Supabase session. Sign in again when expired; automatic token refresh is not implemented.
 
-    python -m pip install -r requirements-dev.txt
-    python -m pytest
+## Sensitive account changes
 
-For a manual review, create an account, try its email again, and sign in. In a separate browser session, sign in as administrator and change the first account to Reviewer. Refresh the first browser. It should offer the review workspace. A direct request to an unauthorized API endpoint returns 403. API writes require the X-InsightFlow header with value 1. Sessions expire after eight hours.
+All changes require the current password. Email changes request confirmation at both addresses through Supabase secure email change. Password changes and deletion request an email OTP. The backend verifies the OTP and account identity before acting. Password values are never stored in application tables. Deletion additionally requires typing DELETE, protects the last administrator, revokes sessions, and deletes the Supabase Auth identity using the server-only PostgreSQL connection. The backend database role therefore requires access to the relevant auth tables; never expose that connection to the browser. Future Storage ownership must be handled before deleting users with uploaded files.
 
-## Verified account changes
+Code-based changes require SMTP templates with `{{ .Token }}`. Pending requests expire after ten minutes and permit five failed attempts. Supabase also enforces its own token lifetime and request limits. Wrong or expired codes cannot modify the account.
 
-Signup requires `confirm_password` matching the password. Signed-in users can change their email or password under Account settings. Both changes require the current password. Email changes require independent codes sent to the old and new address; password changes require a code sent to the current address. Codes expire in 10 minutes, allow five failed attempts, and can be requested once per minute. Successful changes invalidate every existing session. Password recovery for users who forgot their current password is not included.
+## Tests
 
-Apply the updated schema with `python manage_accounts.py init`. Configure these server-only environment variables before sending real email:
-
-- `SMTP_HOST`, `SMTP_PORT` (defaults to 587, STARTTLS required)
-- `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` (a sender verified with your email provider)
-- `EMAIL_CODE_SECRET` (a stable random secret of at least 32 characters, generated securely)
-
-Never commit these values. Missing mail configuration returns an explicit unavailable message and leaves account details unchanged. Tests replace email delivery with an in-memory mailbox; actual delivery requires your provider credentials. This implementation keeps the existing custom account system in Supabase PostgreSQL; it does not use Supabase Auth. Signup email verification remains a separate feature.
-
-## Delete account
-
-Select Delete account in Account settings, enter the current password, request a code, then enter the emailed code and type DELETE. Only the account owner can complete this action. Deletion permanently removes the account, all sessions and pending verification codes. The last administrator must assign another administrator first. Email/password change codes cannot authorize deletion. Apply `python manage_accounts.py init` for the additional challenge column. Real email configuration is required. Future dataset-related tables will need an explicit ownership/retention policy before they are integrated with deletion.
-
-## Start the connected local preview
-
-Save your Supabase Session pooler URI as `DATABASE_URL=...` in the ignored root `.env` file. Percent-encode special characters in the password and include `?sslmode=require`. Run `python start_app.py`, then visit http://127.0.0.1:8018. This launcher binds only to your computer and uses local HTTP cookies. The `.env` file must never be committed.
+Set `INSIGHTFLOW_TEST_DATABASE_URL` to a disposable PostgreSQL database and run `python -m pytest`. Tests mock the Supabase HTTP boundary and exercise the API with a real database, including pending signup, wrong codes, role permissions, password changes, deletion, and session revocation. Real email delivery must be checked in the recipient inbox; automated tests do not claim delivery.

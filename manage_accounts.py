@@ -1,25 +1,20 @@
-"""Initialize the private account schema or bootstrap a new administrator."""
+"""Initialize application tables or promote an already verified account."""
 import argparse
-from getpass import getpass
 from pathlib import Path
-
-from accounts import Registration, Role, connect, create_account
-
-
-def main():
-    parser = argparse.ArgumentParser()
-    commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("init")
-    commands.add_parser("create-admin").add_argument("email")
-    args = parser.parse_args()
-    with connect() as db:
-        if args.command == "init":
-            db.execute((Path(__file__).parent / "database/accounts.sql").read_text())
-        else:
-            data = Registration(email=args.email, password=getpass("New administrator password: "))
-            create_account(db, data, Role.admin)
-            print("Administrator created.")
-
+from account_models import connect
+from start_app import load_settings
 
 if __name__ == "__main__":
-    main()
+    load_settings()
+    parser=argparse.ArgumentParser()
+    commands=parser.add_subparsers(dest="command",required=True)
+    commands.add_parser("init")
+    commands.add_parser("promote-admin").add_argument("email")
+    args=parser.parse_args()
+    with connect() as db:
+        if args.command=="init":
+            db.execute((Path(__file__).parent/"database/supabase_auth.sql").read_text())
+        else:
+            row=db.execute("UPDATE insightflow.auth_profiles SET role='administrator' WHERE email=%s RETURNING id",(args.email.lower(),)).fetchone()
+            if not row:raise SystemExit("Register, verify email and sign in first.")
+            print("Administrator role assigned.")
