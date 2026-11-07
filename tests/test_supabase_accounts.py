@@ -98,3 +98,75 @@ def test_last_admin_and_missing_second_email_code(setup):
     before=len(state["calls"])
     assert client.post("/api/me/security/verify",json={"code":"123456","current_password":state["password"]}).status_code==400
     assert not any(path=="verify" for method,path in state["calls"][before:])
+
+
+@pytest.mark.parametrize("role,preparation,review,admin", [
+    ("data_scientist", 200, 403, 403),
+    ("reviewer", 403, 200, 403),
+    ("administrator", 403, 403, 200),
+])
+def test_role_access_matrix(setup, role, preparation, review, admin):
+    client,state,uid,email=setup
+    verify(client,email)
+    with api.connect() as db:
+        db.execute("UPDATE insightflow.auth_profiles SET role=%s WHERE id=%s",(role,uid))
+    assert client.get("/api/workspaces/preparation").status_code==preparation
+    assert client.get("/api/workspaces/review").status_code==review
+    assert client.get("/api/admin/accounts").status_code==admin
+    assert client.get("/api/workspaces/unknown").status_code==404
+
+
+@pytest.mark.parametrize("role", ["data_scientist", "reviewer"])
+def test_non_admin_cannot_promote_self_or_others(setup, role):
+    client,state,uid,email=setup
+    verify(client,email)
+    with api.connect() as db:
+        db.execute("UPDATE insightflow.auth_profiles SET role=%s WHERE id=%s",(role,uid))
+    for target in [uid,str(uuid4())]:
+        assert client.patch(f"/api/admin/accounts/{target}",json={"role":"administrator"}).status_code==403
+    assert client.get("/api/me").json()["role"]==role
+
+
+def test_admin_assigns_all_roles_and_checks_input(setup):
+    client,state,uid,email=setup
+    verify(client,email)
+    target=str(uuid4())
+    with api.connect() as db:
+        db.execute("UPDATE insightflow.auth_profiles SET role='administrator' WHERE id=%s",(uid,))
+        db.execute("INSERT INTO auth.users(id) VALUES (%s)",(target,))
+        db.execute("INSERT INTO insightflow.auth_profiles(id,email) VALUES (%s,%s)",(target,target+"@example.com"))
+    for role in ["reviewer","administrator","data_scientist"]:
+        response=client.patch(f"/api/admin/accounts/{target}",json={"role":role})
+        assert response.status_code==200
+        assert response.json()["role"]==role
+        assert next(row for row in client.get('/api/admin/accounts').json() if row['id']==target)['role']==role
+    assert client.patch(f"/api/admin/accounts/{target}",json={"role":"owner"}).status_code==422
+    assert client.patch(f"/api/admin/accounts/{target}",json={"role":"reviewer","email":"overwrite@example.com"}).status_code==422
+    assert client.patch(f"/api/admin/accounts/{uuid4()}",json={"role":"reviewer"}).status_code==404
+    assert client.patch(f"/api/admin/accounts/{uid}",json={"role":"reviewer"}).status_code==409
+    assert client.get('/api/me').json()['role']=='administrator'
+
+
+def test_role_changes_apply_to_existing_session(setup):
+    client,state,uid,email=setup
+    verify(client,email)
+    assert client.get('/api/workspaces/preparation').status_code==200
+    for role,allowed,blocked in [('reviewer','/api/workspaces/review','/api/workspaces/preparation'),
+                                 ('administrator','/api/admin/accounts','/api/workspaces/review'),
+                                 ('data_scientist','/api/workspaces/preparation','/api/admin/accounts')]:
+        with api.connect() as db:
+            db.execute('UPDATE insightflow.auth_profiles SET role=%s WHERE id=%s',(role,uid))
+        assert client.get('/api/me').json()['role']==role
+        assert client.get(allowed).status_code==200
+        assert client.get(blocked).status_code==403
+    assert client.patch(f'/api/admin/accounts/{uid}',json={'role':'administrator'}).status_code==403
+
+
+def test_anonymous_and_signup_role_injection(setup):
+    client,state,uid,email=setup
+    assert client.get('/api/admin/accounts').status_code==401
+    assert client.patch(f'/api/admin/accounts/{uid}',json={'role':'administrator'}).status_code==401
+    assert client.get('/api/workspaces/preparation').status_code==401
+    assert client.get('/api/workspaces/review').status_code==401
+    assert client.post('/api/accounts',json={'email':email,'password':state['password'],
+        'confirm_password':state['password'],'role':'administrator'}).status_code==422

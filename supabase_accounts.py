@@ -191,6 +191,7 @@ def accounts(user=Depends(signed_in), db=Depends(database)):
 
 @app.patch("/api/admin/accounts/{account_id}")
 def change_role(account_id: UUID, data: RoleChange, user=Depends(signed_in), db=Depends(database)):
+    if user["role"] != Role.admin: raise HTTPException(403,"Administrator access required")
     db.execute("LOCK TABLE insightflow.auth_profiles IN SHARE ROW EXCLUSIVE MODE")
     row=db.execute("SELECT role FROM insightflow.auth_profiles WHERE id=%s",(user["id"],)).fetchone()
     if not row or row["role"] != Role.admin: raise HTTPException(403,"Administrator access required")

@@ -1,0 +1,53 @@
+.settings-content { max-width:1020px; }
+.settings-content .page-intro { margin-bottom:22px; }
+.settings-content .profile-card { padding:19px 22px; margin-bottom:30px; }
+.settings-sections { display:grid; gap:28px; }
+.settings-section h2 { font-size:19px; font-weight:600; letter-spacing:-.4px; padding-bottom:12px; border-bottom:1px solid var(--line); }
+.settings-section-body { padding:18px 0 0; }
+.settings-row { display:flex; justify-content:space-between; align-items:center; gap:24px; }
+.settings-description { min-width:0; }
+.settings-description p { color:#637f87; font-size:13px; line-height:1.7; max-width:560px; }
+.current-email { display:block; font-size:13px; font-weight:500; margin-bottom:7px; overflow-wrap:anywhere; }
+.primary-badge { display:inline-block; margin-left:7px; font-size:10px; font-weight:500; line-height:1.6; border:1px solid #87bac6; border-radius:20px; padding:1px 7px; color:#326879; vertical-align:middle; }
+.settings-action { flex-shrink:0; font-size:12px; font-weight:500; padding:9px 14px; border:1px solid #c5d4d9; background:#edf3f5; color:#254e5c; box-shadow:0 1px 0 #123e3b08; white-space:nowrap; }
+.settings-action:hover { background:#e0edf1; }
+.settings-editor { border-top:1px solid var(--line); margin-top:20px; padding-top:22px; }
+.settings-editor form { max-width:460px; gap:16px; }
+.settings-editor form>button { justify-self:start; }
+.settings-editor form>p { font-size:12px; color:#637f87; line-height:1.7; }
+.settings-editor .notice { max-width:600px; }
+.danger-zone h2 { color:#b43636; }
+.danger-zone .settings-section-body { border:1px solid #d88e8e; border-radius:10px; padding:18px 20px; margin-top:16px; }
+.settings-action.delete-action { color:#b43636; background:#fff; border-color:#d7a6a6; }
+.settings-action.delete-action:hover { color:white; background:#b43636; border-color:#b43636; }
+.settings-editor p[role=alert] { color:#9b3030; background:#fff0ed; border-radius:8px; padding:12px; }
+.settings-sections + .settings-panel { margin-top:28px; }
+[data-theme=dark] .settings-description p, [data-theme=dark] .settings-editor form>p { color:#a4bcc9; }
+[data-theme=dark] .primary-badge { color:#99d6e4; border-color:#477a89; }
+[data-theme=dark] .settings-action { background:#1d303d; color:#d5e7ef; border-color:#3b5363; }
+[data-theme=dark] .settings-action:hover { background:#294350; }
+[data-theme=dark] .danger-zone h2 { color:#f19e99; }
+[data-theme=dark] .danger-zone .settings-section-body { border-color:#844b50; }
+[data-theme=dark] .settings-action.delete-action { color:#f7aaa4; background:#2b262d; border-color:#75515a; }
+[data-theme=dark] .settings-action.delete-action:hover { color:#fff; background:#a6383b; border-color:#bd4e51; }
+[data-theme=dark] .settings-editor p[role=alert] { background:#3a2428; color:#ffb6ad; }
+@media(max-width:700px) {
+  .settings-row { align-items:flex-start; flex-direction:column; gap:14px; }
+  .settings-action { white-space:normal; }
+  .settings-section h2 { font-size:18px; }
+  .danger-zone .settings-section-body { padding:16px; }
+}
+.permission-guide { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-bottom:25px; }
+.permission-guide>div { padding:17px; border:1px solid var(--line); border-radius:10px; }
+.permission-guide strong { font-size:13px; }
+.permission-guide p,.role-footnote,.role-self-note { font-size:12px; color:var(--muted); line-height:1.7; }
+.permission-guide p { margin-top:8px; }
+.user-search { max-width:360px; margin-bottom:20px; }
+.role-table { max-height:none; border:1px solid var(--line); border-radius:10px; }
+.role-table select { min-width:150px; font-size:12px; }
+.role-table td { max-width:320px; }
+.role-table td:first-child>span:first-child { display:inline-block; max-width:250px; overflow:hidden; text-overflow:ellipsis; vertical-align:middle; }
+.role-footnote { margin-top:18px; }
+.empty-users { padding:25px; color:var(--muted); font-size:13px; }
+.role-link { display:inline-block; }
+@media(max-width:700px) { .permission-guide { grid-template-columns:1fr; } .role-table { overflow-x:auto; } }
