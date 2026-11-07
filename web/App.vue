@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 const labels = { data_scientist: 'Data scientist', reviewer: 'Reviewer', administrator: 'Administrator' }
 const user = ref(null), rows = ref([]), message = ref(''), busy = ref(false)
+const deleteConfirmation = ref('')
 const confirmation = ref(''), setting = ref(''), pending = ref(false), currentPassword = ref(''), newEmail = ref(''), newPassword = ref(''), newConfirmation = ref(''), code = ref(''), newCode = ref('')
 const registering = ref(false), email = ref(''), password = ref(''), workspace = ref('')
 async function api(path, method = 'GET', body) {
@@ -62,7 +63,7 @@ async function securityRequest() {
   await run(async () => {
     await api('/me/security/request', 'POST', {
       current_password: currentPassword.value,
-      ...(setting.value === 'email' ? { new_email: newEmail.value } : { new_password: newPassword.value, confirm_password: newConfirmation.value })
+      ...(setting.value === 'delete' ? { delete_account: true } : setting.value === 'email' ? { new_email: newEmail.value } : { new_password: newPassword.value, confirm_password: newConfirmation.value })
     })
     pending.value = true
     currentPassword.value = newPassword.value = newConfirmation.value = ''
@@ -72,12 +73,13 @@ async function securityRequest() {
 }
 async function securityVerify() {
   await run(async () => {
-    await api('/me/security/verify', 'POST', { code: code.value, ...(setting.value === 'email' ? { new_email_code: newCode.value } : {}) })
+    const result = await api('/me/security/verify', 'POST', { code: code.value, ...(setting.value === 'delete' ? { delete_confirmation: deleteConfirmation.value } : {}), ...(setting.value === 'email' ? { new_email_code: newCode.value } : {}) })
     user.value = null
     pending.value = false
     setting.value = ''
     code.value = newCode.value = password.value = ''
-    message.value = 'Account updated. Please sign in again.'
+    rows.value = []; workspace.value = ''; deleteConfirmation.value = ''
+    message.value = result.message
   })
 }
 onMounted(async () => {
@@ -111,13 +113,14 @@ onMounted(async () => {
       </li>
     </ul>
     <h2>Account settings</h2>
-    <label>Change<select v-model="setting" :disabled="busy" @change="pending = false; message = ''; currentPassword = ''; newPassword = ''; newConfirmation = ''; code = ''; newCode = ''">
-      <option value="">Choose an option</option><option value="email">Email address</option><option value="password">Password</option>
+    <label>Change<select v-model="setting" :disabled="busy" @change="deleteConfirmation = ''; pending = false; message = ''; currentPassword = ''; newPassword = ''; newConfirmation = ''; code = ''; newCode = ''">
+      <option value="">Choose an option</option><option value="email">Email address</option><option value="password">Password</option><option value="delete">Delete account</option>
     </select></label>
     <form v-if="setting && !pending" @submit.prevent="securityRequest">
+      <p v-if="setting === 'delete'" role="alert">Deleting your account permanently removes your login and ends all active sessions. This cannot be undone.</p>
       <label>Current password<input v-model="currentPassword" type="password" autocomplete="current-password" required></label>
       <label v-if="setting === 'email'">New email<input v-model="newEmail" type="email" autocomplete="email" required></label>
-      <template v-else>
+      <template v-else-if="setting === 'password'">
         <label>New password<input v-model="newPassword" type="password" minlength="12" maxlength="128" autocomplete="new-password" required></label>
         <label>Confirm new password<input v-model="newConfirmation" type="password" autocomplete="new-password" required></label>
       </template>
@@ -127,10 +130,16 @@ onMounted(async () => {
     <form v-if="pending" @submit.prevent="securityVerify">
       <label>Code sent to your current email<input v-model="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required></label>
       <label v-if="setting === 'email'">Code sent to your new email<input v-model="newCode" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required></label>
-      <button :disabled="busy">Verify and save</button>
+      <label v-if="setting === 'delete'">Type DELETE to confirm permanent deletion<input v-model="deleteConfirmation" pattern="DELETE" autocomplete="off" required></label>
+      <button :class="{ danger: setting === 'delete' }" :disabled="busy || (setting === 'delete' && deleteConfirmation !== 'DELETE')">{{ setting === 'delete' ? 'Permanently delete my account' : 'Verify and save' }}</button>
       <button type="button" class="link" :disabled="busy" @click="pending = false">Request new codes</button>
     </form>
     <button class="link" :disabled="busy" @click="signOut">Sign out</button>
   </section>
   <p role="status" aria-live="polite">{{ message }}</p>
 </template>
+
+<style scoped>
+.danger { background: #b42318; color: white; border-color: #b42318; }
+.danger:disabled { opacity: .5; }
+</style>

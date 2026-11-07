@@ -8,6 +8,7 @@ import os
 import secrets
 from enum import StrEnum
 from pathlib import Path
+from typing import Literal
 
 import psycopg
 from argon2 import PasswordHasher
@@ -54,13 +55,14 @@ class Signup(Registration):
 class SecurityChange(BaseModel):
     model_config = ConfigDict(extra="forbid")
     current_password: str = Field(max_length=128)
+    delete_account: bool = False
     new_email: EmailStr | None = None
     new_password: str | None = Field(default=None, min_length=12, max_length=128)
     confirm_password: str | None = None
 
     @model_validator(mode="after")
     def valid(self):
-        if (self.new_email is None) == (self.new_password is None):
+        if sum((self.delete_account, self.new_email is not None, self.new_password is not None)) != 1:
             raise ValueError("Choose one change at a time")
         if self.new_password is not None and self.new_password != self.confirm_password:
             raise ValueError("Passwords must match")
@@ -68,6 +70,7 @@ class SecurityChange(BaseModel):
 
 
 class VerifyChange(BaseModel):
+    delete_confirmation: Literal["DELETE"] | None = None
     code: str = Field(pattern=r"^\d{6}$")
     new_email_code: str | None = Field(default=None, pattern=r"^\d{6}$")
 
@@ -228,6 +231,10 @@ def request_change(data: SecurityChange, user=Depends(signed_in), db=Depends(dat
     previous = db.execute("SELECT 1 FROM insightflow.account_changes WHERE account_id=%s AND created_at > now() - interval '60 seconds'", (user["id"],)).fetchone()
     if previous:
         raise HTTPException(429, "Wait one minute before requesting another code")
+    if data.delete_account and account["role"] == Role.admin:
+        count = db.execute("SELECT count(*) AS n FROM insightflow.accounts WHERE role='administrator'").fetchone()["n"]
+        if count <= 1:
+            raise HTTPException(409, "Assign another administrator before deleting your account")
     email = str(data.new_email).lower() if data.new_email else None
     if email and (email == account["email"] or db.execute("SELECT 1 FROM insightflow.accounts WHERE email=%s", (email,)).fetchone()):
         raise HTTPException(409, "Choose a different, unused email address")
@@ -238,17 +245,20 @@ def request_change(data: SecurityChange, user=Depends(signed_in), db=Depends(dat
     if email:
         send_code(email, other)
     db.execute("DELETE FROM insightflow.account_changes WHERE account_id=%s", (user["id"],))
-    db.execute("""INSERT INTO insightflow.account_changes(account_id,code_hash,new_code_hash,new_email,new_password_hash)
-                  VALUES (%s,%s,%s,%s,%s)""", (user["id"], hashed, other_hash, email, hasher.hash(data.new_password) if data.new_password else None))
+    db.execute("""INSERT INTO insightflow.account_changes(account_id,code_hash,new_code_hash,new_email,new_password_hash,delete_account)
+                  VALUES (%s,%s,%s,%s,%s,%s)""", (user["id"], hashed, other_hash, email, hasher.hash(data.new_password) if data.new_password else None, data.delete_account))
     return {"message": "Verification codes sent"}
 
 
 @app.post("/api/me/security/verify")
 def verify_change(data: VerifyChange, response: Response, user=Depends(signed_in), db=Depends(database)):
+    db.execute("LOCK TABLE insightflow.accounts IN SHARE ROW EXCLUSIVE MODE")
     db.execute("SELECT id FROM insightflow.accounts WHERE id=%s FOR UPDATE", (user["id"],))
     change = db.execute("SELECT * FROM insightflow.account_changes WHERE account_id=%s AND expires_at > now() FOR UPDATE", (user["id"],)).fetchone()
     if not change or change["attempts"] >= 5:
         raise HTTPException(400, "Code expired or too many attempts. Request a new code")
+    if change["delete_account"] != (data.delete_confirmation == "DELETE"):
+        raise HTTPException(400, "Confirm the requested account action")
     valid = hmac.compare_digest(change["code_hash"], code_hash(data.code))
     if change["new_email"]:
         valid = valid and bool(data.new_email_code) and hmac.compare_digest(change["new_code_hash"], code_hash(data.new_email_code))
@@ -256,6 +266,13 @@ def verify_change(data: VerifyChange, response: Response, user=Depends(signed_in
         db.execute("UPDATE insightflow.account_changes SET attempts=attempts+1 WHERE account_id=%s", (user["id"],))
         db.commit()  # Persist failed attempts despite the HTTP error.
         raise HTTPException(400, "Incorrect verification code")
+    if change["delete_account"]:
+        account = db.execute("SELECT role FROM insightflow.accounts WHERE id=%s", (user["id"],)).fetchone()
+        if account["role"] == Role.admin and db.execute("SELECT count(*) AS n FROM insightflow.accounts WHERE role='administrator'").fetchone()["n"] <= 1:
+            raise HTTPException(409, "Assign another administrator before deleting your account")
+        db.execute("DELETE FROM insightflow.accounts WHERE id=%s", (user["id"],))
+        response.delete_cookie(COOKIE, path="/")
+        return {"message": "Your account has been permanently deleted."}
     try:
         db.execute("UPDATE insightflow.accounts SET email=COALESCE(%s,email), password_hash=COALESCE(%s,password_hash) WHERE id=%s", (change["new_email"], change["new_password_hash"], user["id"]))
     except psycopg.errors.UniqueViolation:

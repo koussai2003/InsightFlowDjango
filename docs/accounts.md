@@ -43,3 +43,7 @@ Apply the updated schema with `python manage_accounts.py init`. Configure these 
 - `EMAIL_CODE_SECRET` (a stable random secret of at least 32 characters, generated securely)
 
 Never commit these values. Missing mail configuration returns an explicit unavailable message and leaves account details unchanged. Tests replace email delivery with an in-memory mailbox; actual delivery requires your provider credentials. This implementation keeps the existing custom account system in Supabase PostgreSQL; it does not use Supabase Auth. Signup email verification remains a separate feature.
+
+## Delete account
+
+Select Delete account in Account settings, enter the current password, request a code, then enter the emailed code and type DELETE. Only the account owner can complete this action. Deletion permanently removes the account, all sessions and pending verification codes. The last administrator must assign another administrator first. Email/password change codes cannot authorize deletion. Apply `python manage_accounts.py init` for the additional challenge column. Real email configuration is required. Future dataset-related tables will need an explicit ownership/retention policy before they are integrated with deletion.

@@ -103,3 +103,37 @@ def test_security_changes(client, monkeypatch):
     for _ in range(5):
         assert client.post("/api/me/security/verify", json={"code": wrong}).status_code == 400
     assert client.post("/api/me/security/verify", json={"code": mail[new_email]}).status_code == 400
+
+
+def test_delete_account(client, monkeypatch):
+    import accounts
+    mail = {}
+    monkeypatch.setenv("EMAIL_CODE_SECRET", "test-secret-only-" * 4)
+    monkeypatch.setattr(accounts, "send_code", lambda email, code: mail.update({email: code}))
+    data = credentials()
+    assert client.post("/api/me/security/request", json={"current_password": data["password"], "delete_account": True}).status_code == 401
+    account = client.post("/api/accounts", json={**data, "confirm_password": data["password"]}).json()
+    assert client.post("/api/session", json=data).status_code == 200
+    request = {"current_password": data["password"], "delete_account": True}
+    assert client.post("/api/me/security/request", json={**request, "current_password": "wrong"}).status_code == 400
+    with TestClient(app, base_url="https://testserver", headers={"X-InsightFlow": "1"}) as other:
+        assert other.post("/api/session", json=data).status_code == 200
+        assert client.post("/api/me/security/request", json=request).status_code == 200
+        token = {"code": mail[data["email"]], "delete_confirmation": "DELETE"}
+        assert client.post("/api/me/security/verify", json={"code": token["code"]}).status_code == 400
+        assert client.get("/api/me").status_code == 200
+        wrong = "000000" if token["code"] != "000000" else "111111"
+        assert client.post("/api/me/security/verify", json={**token, "code": wrong}).status_code == 400
+        with connect() as db:
+            db.execute("UPDATE insightflow.account_changes SET expires_at=now()-interval '1 second' WHERE account_id=%s", (account["id"],))
+        assert client.post("/api/me/security/verify", json=token).status_code == 400
+        with connect() as db:
+            db.execute("UPDATE insightflow.account_changes SET expires_at=now()+interval '1 minute' WHERE account_id=%s", (account["id"],))
+        assert client.post("/api/me/security/verify", json=token).status_code == 200
+        assert client.get("/api/me").status_code == 401
+        assert other.get("/api/me").status_code == 401
+    assert client.post("/api/session", json=data).status_code == 401
+    with connect() as db:
+        for table in ("accounts", "sessions", "account_changes"):
+            column = "id" if table == "accounts" else "account_id"
+            assert db.execute(f"SELECT 1 FROM insightflow.{table} WHERE {column}=%s", (account["id"],)).fetchone() is None

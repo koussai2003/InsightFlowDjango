@@ -27,3 +27,5 @@ CREATE TABLE IF NOT EXISTS insightflow.account_changes (
     expires_at timestamptz NOT NULL DEFAULT now() + interval '10 minutes'
 );
 ALTER TABLE insightflow.account_changes ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE insightflow.account_changes ADD COLUMN IF NOT EXISTS delete_account boolean NOT NULL DEFAULT false;
