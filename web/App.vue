@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 const labels = { data_scientist: 'Data scientist', reviewer: 'Reviewer', administrator: 'Administrator' }
 const user = ref(null), rows = ref([]), message = ref(''), busy = ref(false)
+const confirmation = ref(''), setting = ref(''), pending = ref(false), currentPassword = ref(''), newEmail = ref(''), newPassword = ref(''), newConfirmation = ref(''), code = ref(''), newCode = ref('')
 const registering = ref(false), email = ref(''), password = ref(''), workspace = ref('')
 async function api(path, method = 'GET', body) {
   const response = await fetch('/api' + path, {
@@ -36,7 +37,8 @@ async function submit() {
   await run(async () => {
     const credentials = { email: email.value, password: password.value }
     if (registering.value) {
-      await api('/accounts', 'POST', credentials)
+      await api('/accounts', 'POST', { ...credentials, confirm_password: confirmation.value })
+      confirmation.value = ''
       registering.value = false
       message.value = 'Account created. Sign in to continue.'
     } else {
@@ -54,7 +56,29 @@ async function updateRole(row) {
   })
 }
 async function signOut() {
-  await run(async () => { await api('/session', 'DELETE'); user.value = null; rows.value = []; workspace.value = '' })
+  await run(async () => { await api('/session', 'DELETE'); user.value = null; rows.value = []; workspace.value = ''; setting.value = ''; pending.value = false; currentPassword.value = newPassword.value = newConfirmation.value = code.value = newCode.value = '' })
+}
+async function securityRequest() {
+  await run(async () => {
+    await api('/me/security/request', 'POST', {
+      current_password: currentPassword.value,
+      ...(setting.value === 'email' ? { new_email: newEmail.value } : { new_password: newPassword.value, confirm_password: newConfirmation.value })
+    })
+    pending.value = true
+    currentPassword.value = newPassword.value = newConfirmation.value = ''
+    code.value = newCode.value = ''
+    message.value = 'Codes sent. They expire in 10 minutes.'
+  })
+}
+async function securityVerify() {
+  await run(async () => {
+    await api('/me/security/verify', 'POST', { code: code.value, ...(setting.value === 'email' ? { new_email_code: newCode.value } : {}) })
+    user.value = null
+    pending.value = false
+    setting.value = ''
+    code.value = newCode.value = password.value = ''
+    message.value = 'Account updated. Please sign in again.'
+  })
 }
 onMounted(async () => {
   try { await load() } catch (error) { if (error.message !== 'Sign in to continue') message.value = error.message }
@@ -67,6 +91,7 @@ onMounted(async () => {
     <form @submit.prevent="submit">
       <label>Email<input v-model="email" type="email" autocomplete="email" required></label>
       <label>Password<input v-model="password" type="password" :minlength="registering ? 12 : 1" maxlength="128" :autocomplete="registering ? 'new-password' : 'current-password'" required></label>
+      <label v-if="registering">Confirm password<input v-model="confirmation" type="password" autocomplete="new-password" required maxlength="128"></label>
       <small v-if="registering">Use at least 12 characters.</small>
       <button :disabled="busy">{{ registering ? 'Create account' : 'Sign in' }}</button>
     </form>
@@ -85,6 +110,26 @@ onMounted(async () => {
         <button v-if="row.id !== user.id" :disabled="busy" @click="updateRole(row)">Save</button>
       </li>
     </ul>
+    <h2>Account settings</h2>
+    <label>Change<select v-model="setting" :disabled="busy" @change="pending = false; message = ''; currentPassword = ''; newPassword = ''; newConfirmation = ''; code = ''; newCode = ''">
+      <option value="">Choose an option</option><option value="email">Email address</option><option value="password">Password</option>
+    </select></label>
+    <form v-if="setting && !pending" @submit.prevent="securityRequest">
+      <label>Current password<input v-model="currentPassword" type="password" autocomplete="current-password" required></label>
+      <label v-if="setting === 'email'">New email<input v-model="newEmail" type="email" autocomplete="email" required></label>
+      <template v-else>
+        <label>New password<input v-model="newPassword" type="password" minlength="12" maxlength="128" autocomplete="new-password" required></label>
+        <label>Confirm new password<input v-model="newConfirmation" type="password" autocomplete="new-password" required></label>
+      </template>
+      <p>{{ setting === 'email' ? 'Verify both your current and new email addresses.' : 'A verification code will be sent to your current email.' }}</p>
+      <button :disabled="busy">Send verification code{{ setting === 'email' ? 's' : '' }}</button>
+    </form>
+    <form v-if="pending" @submit.prevent="securityVerify">
+      <label>Code sent to your current email<input v-model="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required></label>
+      <label v-if="setting === 'email'">Code sent to your new email<input v-model="newCode" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required></label>
+      <button :disabled="busy">Verify and save</button>
+      <button type="button" class="link" :disabled="busy" @click="pending = false">Request new codes</button>
+    </form>
     <button class="link" :disabled="busy" @click="signOut">Sign out</button>
   </section>
   <p role="status" aria-live="polite">{{ message }}</p>

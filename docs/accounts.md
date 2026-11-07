@@ -31,3 +31,15 @@ Run the integration tests against a dedicated, disposable PostgreSQL database. T
     python -m pytest
 
 For a manual review, create an account, try its email again, and sign in. In a separate browser session, sign in as administrator and change the first account to Reviewer. Refresh the first browser. It should offer the review workspace. A direct request to an unauthorized API endpoint returns 403. API writes require the X-InsightFlow header with value 1. Sessions expire after eight hours.
+
+## Verified account changes
+
+Signup requires `confirm_password` matching the password. Signed-in users can change their email or password under Account settings. Both changes require the current password. Email changes require independent codes sent to the old and new address; password changes require a code sent to the current address. Codes expire in 10 minutes, allow five failed attempts, and can be requested once per minute. Successful changes invalidate every existing session. Password recovery for users who forgot their current password is not included.
+
+Apply the updated schema with `python manage_accounts.py init`. Configure these server-only environment variables before sending real email:
+
+- `SMTP_HOST`, `SMTP_PORT` (defaults to 587, STARTTLS required)
+- `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` (a sender verified with your email provider)
+- `EMAIL_CODE_SECRET` (a stable random secret of at least 32 characters, generated securely)
+
+Never commit these values. Missing mail configuration returns an explicit unavailable message and leaves account details unchanged. Tests replace email delivery with an in-memory mailbox; actual delivery requires your provider credentials. This implementation keeps the existing custom account system in Supabase PostgreSQL; it does not use Supabase Auth. Signup email verification remains a separate feature.

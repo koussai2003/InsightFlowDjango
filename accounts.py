@@ -1,5 +1,9 @@
 """InsightFlow account API. Use a server-only Supabase PostgreSQL connection."""
 import hashlib
+import hmac
+import smtplib
+import ssl
+from email.message import EmailMessage
 import os
 import secrets
 from enum import StrEnum
@@ -13,7 +17,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from psycopg.rows import dict_row
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 app = FastAPI(title="InsightFlow")
 hasher = PasswordHasher()
@@ -35,6 +39,61 @@ class Credentials(BaseModel):
 
 class Registration(Credentials):
     password: str = Field(min_length=12, max_length=128)
+
+
+class Signup(Registration):
+    confirm_password: str
+
+    @model_validator(mode="after")
+    def matching(self):
+        if self.password != self.confirm_password:
+            raise ValueError("Passwords must match")
+        return self
+
+
+class SecurityChange(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    current_password: str = Field(max_length=128)
+    new_email: EmailStr | None = None
+    new_password: str | None = Field(default=None, min_length=12, max_length=128)
+    confirm_password: str | None = None
+
+    @model_validator(mode="after")
+    def valid(self):
+        if (self.new_email is None) == (self.new_password is None):
+            raise ValueError("Choose one change at a time")
+        if self.new_password is not None and self.new_password != self.confirm_password:
+            raise ValueError("Passwords must match")
+        return self
+
+
+class VerifyChange(BaseModel):
+    code: str = Field(pattern=r"^\d{6}$")
+    new_email_code: str | None = Field(default=None, pattern=r"^\d{6}$")
+
+
+def code_hash(code):
+    key = os.environ.get("EMAIL_CODE_SECRET")
+    if not key or len(key) < 32:
+        raise HTTPException(503, "Email verification is not configured yet")
+    return hmac.new(key.encode(), code.encode(), hashlib.sha256).hexdigest()
+
+
+def send_code(email, code):
+    if not all(os.environ.get(k) for k in ("SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD", "SMTP_FROM")):
+        raise HTTPException(503, "Email delivery is not configured yet")
+    message = EmailMessage()
+    message["From"] = os.environ["SMTP_FROM"]
+    message["To"] = email
+    message["Subject"] = "InsightFlow account verification"
+    message.set_content(f"Your account change code is {code}. It expires in 10 minutes. If you did not request this change, ignore this email.")
+    try:
+        with smtplib.SMTP(os.environ["SMTP_HOST"], int(os.getenv("SMTP_PORT", "587")), timeout=15) as smtp:
+            smtp.starttls(context=ssl.create_default_context())
+            smtp.login(os.environ["SMTP_USER"], os.environ["SMTP_PASSWORD"])
+            smtp.send_message(message)
+    except (OSError, smtplib.SMTPException):
+        raise HTTPException(503, "Could not send verification email. Please try again later") from None
 
 
 class RoleChange(BaseModel):
@@ -105,7 +164,7 @@ def create_account(db, data, role=Role.scientist):
 
 
 @app.post("/api/accounts", status_code=201)
-def register(data: Registration, db=Depends(database)):
+def register(data: Signup, db=Depends(database)):
     return create_account(db, data)
 
 
@@ -157,6 +216,54 @@ def change_role(account_id: int, data: RoleChange, admin=Depends(require_role(Ro
     if not row:
         raise HTTPException(404, "Account not found")
     return row
+
+
+@app.post("/api/me/security/request")
+def request_change(data: SecurityChange, user=Depends(signed_in), db=Depends(database)):
+    account = db.execute("SELECT * FROM insightflow.accounts WHERE id=%s FOR UPDATE", (user["id"],)).fetchone()
+    try:
+        hasher.verify(account["password_hash"], data.current_password)
+    except VerifyMismatchError:
+        raise HTTPException(400, "Current password is incorrect") from None
+    previous = db.execute("SELECT 1 FROM insightflow.account_changes WHERE account_id=%s AND created_at > now() - interval '60 seconds'", (user["id"],)).fetchone()
+    if previous:
+        raise HTTPException(429, "Wait one minute before requesting another code")
+    email = str(data.new_email).lower() if data.new_email else None
+    if email and (email == account["email"] or db.execute("SELECT 1 FROM insightflow.accounts WHERE email=%s", (email,)).fetchone()):
+        raise HTTPException(409, "Choose a different, unused email address")
+    code = f"{secrets.randbelow(1000000):06d}"
+    other = f"{secrets.randbelow(1000000):06d}" if email else None
+    hashed, other_hash = code_hash(code), code_hash(other) if other else None
+    send_code(account["email"], code)
+    if email:
+        send_code(email, other)
+    db.execute("DELETE FROM insightflow.account_changes WHERE account_id=%s", (user["id"],))
+    db.execute("""INSERT INTO insightflow.account_changes(account_id,code_hash,new_code_hash,new_email,new_password_hash)
+                  VALUES (%s,%s,%s,%s,%s)""", (user["id"], hashed, other_hash, email, hasher.hash(data.new_password) if data.new_password else None))
+    return {"message": "Verification codes sent"}
+
+
+@app.post("/api/me/security/verify")
+def verify_change(data: VerifyChange, response: Response, user=Depends(signed_in), db=Depends(database)):
+    db.execute("SELECT id FROM insightflow.accounts WHERE id=%s FOR UPDATE", (user["id"],))
+    change = db.execute("SELECT * FROM insightflow.account_changes WHERE account_id=%s AND expires_at > now() FOR UPDATE", (user["id"],)).fetchone()
+    if not change or change["attempts"] >= 5:
+        raise HTTPException(400, "Code expired or too many attempts. Request a new code")
+    valid = hmac.compare_digest(change["code_hash"], code_hash(data.code))
+    if change["new_email"]:
+        valid = valid and bool(data.new_email_code) and hmac.compare_digest(change["new_code_hash"], code_hash(data.new_email_code))
+    if not valid:
+        db.execute("UPDATE insightflow.account_changes SET attempts=attempts+1 WHERE account_id=%s", (user["id"],))
+        db.commit()  # Persist failed attempts despite the HTTP error.
+        raise HTTPException(400, "Incorrect verification code")
+    try:
+        db.execute("UPDATE insightflow.accounts SET email=COALESCE(%s,email), password_hash=COALESCE(%s,password_hash) WHERE id=%s", (change["new_email"], change["new_password_hash"], user["id"]))
+    except psycopg.errors.UniqueViolation:
+        raise HTTPException(409, "That email is already registered") from None
+    db.execute("DELETE FROM insightflow.account_changes WHERE account_id=%s", (user["id"],))
+    db.execute("DELETE FROM insightflow.sessions WHERE account_id=%s", (user["id"],))
+    response.delete_cookie(COOKIE, path="/")
+    return {"message": "Account updated. Sign in again."}
 
 
 # These role-restricted entry points can be extended by the dataset and review stories.
