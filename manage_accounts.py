@@ -14,6 +14,7 @@ if __name__ == "__main__":
     with connect() as db:
         if args.command=="init":
             db.execute((Path(__file__).parent/"database/supabase_auth.sql").read_text())
+            db.execute((Path(__file__).parent/"database/projects.sql").read_text())
         else:
             row=db.execute("UPDATE insightflow.auth_profiles SET role='administrator' WHERE email=%s RETURNING id",(args.email.lower(),)).fetchone()
             if not row:raise SystemExit("Register, verify email and sign in first.")

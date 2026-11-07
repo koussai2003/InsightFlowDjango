@@ -13,6 +13,7 @@ def setup(monkeypatch):
     with api.connect() as db:
         db.execute("CREATE SCHEMA IF NOT EXISTS auth; CREATE TABLE IF NOT EXISTS auth.users(id uuid PRIMARY KEY)")
         db.execute((Path(__file__).parents[1]/"database/supabase_auth.sql").read_text())
+        db.execute((Path(__file__).parents[1]/"database/projects.sql").read_text())
     uid=str(uuid4()); email=uid+"@example.com"
     state={"confirmed":False,"password":"original password 123", "deleted":False,"calls":[]}
     def identity():return {"id":uid,"email":email,"email_confirmed_at":"2026-01-01" if state["confirmed"] else None}
@@ -57,7 +58,7 @@ def test_signup_requires_verification(setup):
     assert verify(client,email).status_code==200
     assert client.get("/api/me").json()["role"]=="data_scientist"
     assert client.get("/api/admin/accounts").status_code==403
-    assert client.get("/api/workspaces/review").status_code==403
+    assert client.get("/api/workspaces/review").status_code==410
     assert client.delete("/api/session").status_code==204
     assert client.get("/api/me").status_code==401
 
@@ -80,6 +81,8 @@ def test_password_and_delete_require_code(setup):
     assert client.post("/api/me/security/verify",json={**data,"code":"123456"}).status_code==200
     assert client.get("/api/me").status_code==401
     assert client.post("/api/session",json={"email":email,"password":state["password"]}).status_code==200
+    for project in client.get('/api/projects').json():
+        assert client.request('DELETE','/api/projects/'+project['id'],json={'confirmation':project['name']}).status_code==204
     assert client.post("/api/me/security/request",json={"current_password":state["password"],"delete_account":True}).status_code==200
     data={"current_password":state["password"],"code":"123456"}
     assert client.post("/api/me/security/verify",json=data).status_code==400
@@ -110,10 +113,10 @@ def test_role_access_matrix(setup, role, preparation, review, admin):
     verify(client,email)
     with api.connect() as db:
         db.execute("UPDATE insightflow.auth_profiles SET role=%s WHERE id=%s",(role,uid))
-    assert client.get("/api/workspaces/preparation").status_code==preparation
-    assert client.get("/api/workspaces/review").status_code==review
+    assert client.get("/api/workspaces/preparation").status_code==410
+    assert client.get("/api/workspaces/review").status_code==410
     assert client.get("/api/admin/accounts").status_code==admin
-    assert client.get("/api/workspaces/unknown").status_code==404
+    assert client.get("/api/workspaces/unknown").status_code==410
 
 
 @pytest.mark.parametrize("role", ["data_scientist", "reviewer"])
@@ -150,15 +153,13 @@ def test_admin_assigns_all_roles_and_checks_input(setup):
 def test_role_changes_apply_to_existing_session(setup):
     client,state,uid,email=setup
     verify(client,email)
-    assert client.get('/api/workspaces/preparation').status_code==200
-    for role,allowed,blocked in [('reviewer','/api/workspaces/review','/api/workspaces/preparation'),
-                                 ('administrator','/api/admin/accounts','/api/workspaces/review'),
-                                 ('data_scientist','/api/workspaces/preparation','/api/admin/accounts')]:
+    for role,allowed,blocked in [('administrator','/api/admin/accounts','/api/workspaces/review'),
+                                 ('data_scientist','/api/me','/api/admin/accounts')]:
         with api.connect() as db:
             db.execute('UPDATE insightflow.auth_profiles SET role=%s WHERE id=%s',(role,uid))
         assert client.get('/api/me').json()['role']==role
         assert client.get(allowed).status_code==200
-        assert client.get(blocked).status_code==403
+        assert client.get(blocked).status_code==(410 if 'workspaces' in blocked else 403)
     assert client.patch(f'/api/admin/accounts/{uid}',json={'role':'administrator'}).status_code==403
 
 

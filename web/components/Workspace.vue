@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue'
+defineProps({project:Object})
 const prompt = ref(''), file = ref(null), headers = ref([]), preview = ref([]), error = ref(''), questions = ref([]), dragging = ref(false), reading = ref(false)
 const picker = ref(null)
 let selection = 0
@@ -50,7 +51,7 @@ function send() {
 </script>
 <template>
   <div class="workspace-page">
-    <header class="page-header"><div><span class="eyebrow">YOUR WORKSPACE</span><h1>Data studio</h1></div><span class="status-pill"><i></i> Local preview</span></header>
+    <header class="page-header"><div><span class="eyebrow">{{ project?.name || 'YOUR WORKSPACE' }}</span><h1>Data studio</h1></div><span class="status-pill"><i></i> Local preview</span></header>
     <div class="studio-body">
       <div class="welcome"><span class="studio-mark" aria-hidden="true">IF<span>✦</span></span><span class="eyebrow">FROM DATA TO UNDERSTANDING</span><h2>Good questions.<br><span>Clearer insights.</span></h2><p>Bring your dataset. Start with a question.<br>A dedicated space for your next discovery.</p></div>
       <section class="conversation" v-if="questions.length" aria-label="Your questions" aria-live="polite"><article v-for="(question, index) in questions" :key="index" class="question"><span class="eyebrow">YOU <span v-if="question.dataset">· {{ question.dataset }}</span></span><p>{{ question.text }}</p><small>Question saved in this session. AI responses are not connected yet.</small></article></section>

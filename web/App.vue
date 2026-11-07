@@ -1,10 +1,9 @@
 <script setup>
 import { onMounted, onUnmounted, ref } from 'vue'
 import Brand from './components/Brand.vue'
-import Workspace from './components/Workspace.vue'
+import ProjectSpace from './components/ProjectSpace.vue'
 import ThemeToggle from './components/ThemeToggle.vue'
 import UserManagement from './components/UserManagement.vue'
-import RoleHome from './components/RoleHome.vue'
 function currentPage() { return { '#/settings': 'settings', '#/team': 'team' }[window.location.hash] || 'workspace' }
 const page = ref(currentPage())
 async function refreshAccess() {
@@ -16,7 +15,7 @@ onMounted(() => window.addEventListener('hashchange', syncPage))
 onUnmounted(() => window.removeEventListener('hashchange', syncPage))
 onMounted(() => window.addEventListener('focus', refreshAccess))
 onUnmounted(() => window.removeEventListener('focus', refreshAccess))
-const labels = { data_scientist: 'Data scientist', reviewer: 'Reviewer', administrator: 'Administrator' }
+const labels = { data_scientist: 'Member', reviewer: 'Member', administrator: 'Platform administrator' }
 const user = ref(null), rows = ref([]), message = ref(''), busy = ref(false)
 const signupPending = ref(false), signupCode = ref('')
 const deleteConfirmation = ref('')
@@ -58,10 +57,7 @@ async function load() {
   workspace.value = ''
   user.value = await api('/me')
   if (user.value.role === 'administrator') rows.value = await api('/admin/accounts')
-  else {
-    const path = user.value.role === 'reviewer' ? 'review' : 'preparation'
-    workspace.value = (await api('/workspaces/' + path)).title
-  }
+
 }
 async function run(action) {
   busy.value = true
@@ -175,8 +171,8 @@ onMounted(async () => {
     <p class="notice" v-if="message" role="status" aria-live="polite">{{ message }}</p></section><span class="auth-footnote">A clearer view starts here.</span></main>
   </div>
   <div v-else class="app-shell">
-    <aside class="sidebar"><a class="brand-link" href="#/workspace" aria-label="InsightFlow home"><Brand/></a><div class="sidebar-nav"><span class="nav-label">WORKSPACE</span><a href="#/workspace" :class="{ active: page === 'workspace' }" :aria-current="page === 'workspace' ? 'page' : undefined"><span class="nav-icon">&#9707;</span> {{ user.role === 'data_scientist' ? 'Data studio' : user.role === 'reviewer' ? 'Review workspace' : 'Overview' }}</a><a v-if="user.role === 'administrator'" href="#/team" :class="{ active: page === 'team' }" :aria-current="page === 'team' ? 'page' : undefined"><span class="nav-icon">&#9783;</span> Users &amp; permissions</a></div><div class="sidebar-note"><span class="little-spark">&#10022;</span><strong>Every insight starts<br>with a question.</strong><p>Make room for discovery.</p></div><div class="account-nav"><div class="user-card"><span class="avatar">{{ user.email.charAt(0).toUpperCase() }}</span><div><strong>{{ labels[user.role] }}</strong><span :title="user.email">{{ user.email }}</span></div></div><a href="#/settings" :class="{ active: page === 'settings' }" :aria-current="page === 'settings' ? 'page' : undefined"><span class="nav-icon">&#9881;</span> Account settings</a><ThemeToggle/><button class="signout" :disabled="busy" @click="signOut"><span class="nav-icon">&#8599;</span> Sign out</button></div></aside>
-    <main class="app-main"><Workspace v-if="user.role === 'data_scientist'" v-show="page === 'workspace'"/><RoleHome v-else-if="page === 'workspace'" :role="user.role"/><UserManagement v-if="page === 'team' && user.role === 'administrator'" :rows="rows" :user="user" :busy="busy" @save="updateRole" @refresh="run(load)"/><section v-else-if="page === 'team'" class="settings-content"><h1>Administrator access required</h1><p class="page-intro">Your account cannot manage other users.</p><a class="link" href="#/workspace">Return to your workspace</a></section><section v-show="page === 'settings'" class="settings-page"><header class="page-header"><div><span class="eyebrow">YOUR ACCOUNT</span><h1>Account settings</h1></div><span class="status-pill">{{ labels[user.role] }}</span></header><div class="settings-content"><p class="page-intro">Manage your details and keep your account secure.</p><div class="profile-card"><span class="avatar large">{{ user.email.charAt(0).toUpperCase() }}</span><div><h2>{{ labels[user.role] }}</h2><p>{{ user.email }}</p></div><span class="profile-badge">Signed in</span></div><div class="settings-sections">
+    <aside class="sidebar"><a class="brand-link" href="#/workspace" aria-label="InsightFlow home"><Brand/></a><div class="sidebar-nav"><span class="nav-label">WORKSPACE</span><a href="#/workspace" :class="{ active: page === 'workspace' }" :aria-current="page === 'workspace' ? 'page' : undefined"><span class="nav-icon">&#9707;</span> My projects</a><a v-if="user.role === 'administrator'" href="#/team" :class="{ active: page === 'team' }" :aria-current="page === 'team' ? 'page' : undefined"><span class="nav-icon">&#9783;</span> Platform accounts</a></div><div class="sidebar-note"><span class="little-spark">&#10022;</span><strong>Every insight starts<br>with a question.</strong><p>Make room for discovery.</p></div><div class="account-nav"><div class="user-card"><span class="avatar">{{ user.email.charAt(0).toUpperCase() }}</span><div><strong>{{ labels[user.role] }}</strong><span :title="user.email">{{ user.email }}</span></div></div><a href="#/settings" :class="{ active: page === 'settings' }" :aria-current="page === 'settings' ? 'page' : undefined"><span class="nav-icon">&#9881;</span> Account settings</a><ThemeToggle/><button class="signout" :disabled="busy" @click="signOut"><span class="nav-icon">&#8599;</span> Sign out</button></div></aside>
+    <main class="app-main"><ProjectSpace v-show="page === 'workspace'" :api="api" :user="user"/><UserManagement v-if="page === 'team' && user.role === 'administrator'" :rows="rows" :user="user" :busy="busy" @save="updateRole" @refresh="run(load)"/><section v-else-if="page === 'team'" class="settings-content"><h1>Administrator access required</h1><p class="page-intro">Your account cannot manage other users.</p><a class="link" href="#/workspace">Return to your workspace</a></section><section v-show="page === 'settings'" class="settings-page"><header class="page-header"><div><span class="eyebrow">YOUR ACCOUNT</span><h1>Account settings</h1></div><span class="status-pill">{{ labels[user.role] }}</span></header><div class="settings-content"><p class="page-intro">Manage your details and keep your account secure.</p><div class="profile-card"><span class="avatar large">{{ user.email.charAt(0).toUpperCase() }}</span><div><h2>{{ labels[user.role] }}</h2><p>{{ user.email }}</p></div><span class="profile-badge">Signed in</span></div><div class="settings-sections">
       <section v-for="section in securitySections" :key="section.id" class="settings-section" :class="{ 'danger-zone': section.id === 'delete' }" :aria-labelledby="'heading-' + section.id">
         <h2 :id="'heading-' + section.id">{{ section.title }}</h2>
         <div class="settings-section-body">

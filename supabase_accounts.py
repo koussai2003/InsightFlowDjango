@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr, Field
 from account_models import Signup, Credentials, SecurityChange, RoleChange, Role, connect, database
+from projects import project_router, ensure_personal_project, protect_owned_projects
 
 app = FastAPI(title="InsightFlow")
 COOKIE = "insightflow_auth"
@@ -77,6 +78,7 @@ def profile(db, identity):
     uid = str(UUID(identity["id"]))
     row = db.execute("""INSERT INTO insightflow.auth_profiles(id,email) VALUES (%s,%s)
         ON CONFLICT(id) DO UPDATE SET email=excluded.email RETURNING id,email,role""", (uid, identity["email"].lower())).fetchone()
+    ensure_personal_project(db,uid)
     return {**row, "id": str(row["id"])}
 
 
@@ -203,10 +205,7 @@ def change_role(account_id: UUID, data: RoleChange, user=Depends(signed_in), db=
 
 @app.get("/api/workspaces/{workspace}")
 def workspace(workspace: str, user=Depends(signed_in)):
-    roles={"preparation":Role.scientist,"review":Role.reviewer}
-    if workspace not in roles: raise HTTPException(404,"Workspace not found")
-    if user["role"] != roles[workspace]: raise HTTPException(403,"This account does not have permission")
-    return {"title":"Dataset " + workspace}
+    raise HTTPException(410,"Select a project and use its workspace")
 
 
 class VerifySecurity(BaseModel):
@@ -237,7 +236,9 @@ def security_request(data: SecurityChange,user=Depends(signed_in),db=Depends(dat
     if db.execute("SELECT 1 FROM insightflow.auth_requests WHERE profile_id=%s AND created_at>now()-interval '60 seconds'",(user["id"],)).fetchone():
         raise HTTPException(429,"Wait one minute before requesting another email")
     action="delete" if data.delete_account else "email" if data.new_email else "password"
-    if action=="delete": protect_last_admin(db,user)
+    if action=="delete":
+        protect_last_admin(db,user)
+        protect_owned_projects(db,user['id'])
     email=str(data.new_email).lower() if data.new_email else None
     if email==user["email"].lower(): raise HTTPException(400,"Enter a different email address")
     if action=="email":
@@ -279,7 +280,9 @@ def security_verify(data: VerifySecurity,response: Response,user=Depends(signed_
     if change["action"]=="email":
         if verified["user"]["email"].lower()!=change["new_email"]: raise HTTPException(400,"Verify both email addresses first")
         db.execute("UPDATE insightflow.auth_profiles SET email=%s WHERE id=%s",(change["new_email"],user["id"]))
-    if change["action"]=="delete": protect_last_admin(db,user)
+    if change["action"]=="delete":
+        protect_last_admin(db,user)
+        protect_owned_projects(db,user['id'])
     auth("POST","logout?scope=global",token=verified["access_token"])
     db.execute("DELETE FROM insightflow.auth_sessions WHERE profile_id=%s",(user["id"],))
     db.execute("DELETE FROM insightflow.auth_requests WHERE profile_id=%s",(user["id"],))
@@ -296,5 +299,6 @@ import psycopg
 async def database_error(request,error):
     return JSONResponse({"detail":"Database temporarily unavailable. Try again shortly."},status_code=503)
 
+app.include_router(project_router(signed_in))
 build=Path(__file__).parent/"web"/"dist"
 if build.is_dir(): app.mount("/",StaticFiles(directory=build,html=True),name="web")

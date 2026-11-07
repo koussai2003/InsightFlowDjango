@@ -34,21 +34,11 @@ All changes require the current password. Email changes request confirmation at 
 
 Code-based changes require SMTP templates with `{{ .Token }}`. Pending requests expire after ten minutes and permit five failed attempts. Supabase also enforces its own token lifetime and request limits. Wrong or expired codes cannot modify the account.
 
-## IF-11 / US 1.5: roles and permissions
+## Project memberships and platform administration
 
-| Role | Interface | Allowed role-specific endpoints |
-| --- | --- | --- |
-| Data scientist | Data Studio, local CSV preview and question drafts | `GET /api/workspaces/preparation` |
-| Reviewer | Review workspace (review workflow is planned) | `GET /api/workspaces/review` |
-| Administrator | Overview and Users & permissions | `GET /api/admin/accounts`, `PATCH /api/admin/accounts/{id}` |
+See [Private workspaces](project-workspaces.md) for the current permission model and updated backlog. Account-level `administrator` grants platform account management only. Existing `data_scientist` and `reviewer` profile values are legacy ordinary-member classifications; project permissions come exclusively from project membership. The legacy `/api/workspaces/{workspace}` route now returns 410 to require a project identifier.
 
-All three roles can access their own account settings. Roles are exclusive: administrator access does not implicitly grant data preparation or review access. The server returns 401 for anonymous requests and 403 for a signed-in account without the required role. Database roles are checked on each request; changing a role applies to existing sessions without waiting for a new token. The interface refreshes access when navigating or returning focus to the app.
-
-Administrators open **Users & permissions**, search verified users by email, choose a role and click **Save role**. A selection remains a draft until the server confirms the update. Administrators cannot demote themselves. Another administrator must change their role, which also prevents removing the last administrator through this endpoint. Invalid roles and extra request fields are rejected. The administrator role is never accepted from public signup or user-editable Supabase metadata.
-
-The first administrator must be deliberately bootstrapped by the project owner with the documented `manage_accounts.py promote-admin` command. Implementation and testing do not automatically promote a real account.
-
-Review checklist: verify each role's navigation, try the restricted URLs directly, change another account's role and check its existing session, and confirm that self-demotion is blocked. Dataset approval and collaborator invitations are future stories and are not implemented by IF-11.
+Initial setup now applies `database/projects.sql` as well as the authentication schema. Existing installations can run `python manage_accounts.py init` again; both schema files are additive and idempotent. A verified user gets one personal project, including existing users on their next project-list request. Account deletion requires transfer or deletion of owned projects first.
 
 ## Running the tests
 
