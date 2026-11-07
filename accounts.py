@@ -105,7 +105,7 @@ class RoleChange(BaseModel):
 
 
 def connect():
-    return psycopg.connect(os.environ["DATABASE_URL"], row_factory=dict_row)
+    return psycopg.connect(os.environ["DATABASE_URL"], row_factory=dict_row, connect_timeout=5)
 
 
 def database():
@@ -122,6 +122,11 @@ async def protect_writes(request: Request, call_next):
     if request.url.path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store"
     return response
+
+
+@app.exception_handler(psycopg.OperationalError)
+async def database_unavailable(request: Request, error: psycopg.OperationalError):
+    return JSONResponse({"detail": "The database is temporarily unavailable. Please try again shortly."}, status_code=503)
 
 
 @app.exception_handler(RequestValidationError)

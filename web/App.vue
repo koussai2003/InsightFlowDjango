@@ -6,10 +6,16 @@ const deleteConfirmation = ref('')
 const confirmation = ref(''), setting = ref(''), pending = ref(false), currentPassword = ref(''), newEmail = ref(''), newPassword = ref(''), newConfirmation = ref(''), code = ref(''), newCode = ref('')
 const registering = ref(false), email = ref(''), password = ref(''), workspace = ref('')
 async function api(path, method = 'GET', body) {
-  const response = await fetch('/api' + path, {
+  let response
+  try {
+    response = await fetch('/api' + path, {
+    signal: AbortSignal.timeout(40000),
     method, headers: { 'Content-Type': 'application/json', 'X-InsightFlow': '1' },
     body: body ? JSON.stringify(body) : undefined
-  })
+    })
+  } catch (error) {
+    throw new Error(error.name === 'TimeoutError' ? 'The server took too long to respond. Please try again.' : 'Cannot reach the server. Please try again.')
+  }
   if (response.status === 204) return
   const data = await response.json()
   if (!response.ok) {
@@ -95,7 +101,7 @@ onMounted(async () => {
       <label>Password<input v-model="password" type="password" :minlength="registering ? 12 : 1" maxlength="128" :autocomplete="registering ? 'new-password' : 'current-password'" required></label>
       <label v-if="registering">Confirm password<input v-model="confirmation" type="password" autocomplete="new-password" required maxlength="128"></label>
       <small v-if="registering">Use at least 12 characters.</small>
-      <button :disabled="busy">{{ registering ? 'Create account' : 'Sign in' }}</button>
+      <button :disabled="busy">{{ busy ? 'Please wait…' : registering ? 'Create account' : 'Sign in' }}</button>
     </form>
     <button class="link" :disabled="busy" @click="registering = !registering; message = ''; password = ''">{{ registering ? 'Sign in instead' : 'Create an account' }}</button>
   </section>
