@@ -47,3 +47,7 @@ Never commit these values. Missing mail configuration returns an explicit unavai
 ## Delete account
 
 Select Delete account in Account settings, enter the current password, request a code, then enter the emailed code and type DELETE. Only the account owner can complete this action. Deletion permanently removes the account, all sessions and pending verification codes. The last administrator must assign another administrator first. Email/password change codes cannot authorize deletion. Apply `python manage_accounts.py init` for the additional challenge column. Real email configuration is required. Future dataset-related tables will need an explicit ownership/retention policy before they are integrated with deletion.
+
+## Start the connected local preview
+
+Save your Supabase Session pooler URI as `DATABASE_URL=...` in the ignored root `.env` file. Percent-encode special characters in the password and include `?sslmode=require`. Run `python start_app.py`, then visit http://127.0.0.1:8018. This launcher binds only to your computer and uses local HTTP cookies. The `.env` file must never be committed.
