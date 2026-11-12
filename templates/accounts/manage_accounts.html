@@ -1,0 +1,47 @@
+{% extends "app_base.html" %}
+{% block title %}User management{% endblock %}
+{% block app_content %}
+<div class="workspace-page">
+  <header class="page-header">
+    <div>
+      <span class="eyebrow">ADMINISTRATION</span>
+      <h1>User management</h1>
+    </div>
+    <span class="status-pill"><i></i> {{ users|length }} account{{ users|length|pluralize }}</span>
+  </header>
+  <div class="settings-content">
+    <p class="page-intro">Manage roles for all InsightFlow accounts. You cannot change your own role.</p>
+
+    <div class="settings-panel">
+      <ul>
+        {% for u in users %}
+        <li>
+          <label>
+            <span class="avatar">{{ u.email|first|upper }}</span>
+            <div>
+              <strong>{{ u.email }}</strong>
+              <small style="display:block;color:var(--muted)">{{ u.get_role_display }}{% if not u.is_active %} · unverified{% endif %}</small>
+            </div>
+          </label>
+          {% if u == user %}
+            <span style="font-size:12px;color:var(--muted);white-space:nowrap">Ask another administrator to change your role.</span>
+          {% else %}
+            <form method="post" action="/manage/accounts/{{ u.pk }}/role" style="display:flex;gap:8px;align-items:center">
+              {% csrf_token %}
+              <select name="role" aria-label="Role for {{ u.email }}">
+                <option value="data_scientist" {% if u.role == 'data_scientist' %}selected{% endif %}>Data scientist</option>
+                <option value="reviewer" {% if u.role == 'reviewer' %}selected{% endif %}>Reviewer</option>
+                <option value="administrator" {% if u.role == 'administrator' %}selected{% endif %}>Administrator</option>
+              </select>
+              <button type="submit" style="white-space:nowrap">Save</button>
+            </form>
+          {% endif %}
+        </li>
+        {% empty %}
+          <li><p>No accounts found.</p></li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}

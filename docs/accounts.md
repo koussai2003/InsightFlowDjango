@@ -1,45 +1,101 @@
-# Supabase Auth account workflow
+# InsightFlow: Accounts, Authentication & Access Control
 
-The running app uses Supabase Auth for passwords, signup verification and email tokens. Application roles are stored in private `insightflow.auth_profiles` rows keyed by the Supabase user UUID. Legacy custom account tables are not used by the application and have not been migrated or deleted.
+InsightFlow uses **Django 5.2 LTS** and **PostgreSQL** for user authentication, session management, and role-based access control.
 
-## Configuration
+---
 
-Set these values in the ignored root `.env` file:
+## Architecture & Data Models
 
-- `DATABASE_URL`: Session pooler URI, URL-encoded password, `sslmode=require`.
-- `SUPABASE_URL`: project API URL.
-- `SUPABASE_PUBLISHABLE_KEY`: project publishable API key.
+### User Model (`accounts.User`)
+- Inherits from `AbstractUser` with `username = None`.
+- Unique identifier: lower-cased `email`.
+- Roles (`role` field):
+  - `data_scientist` (default for new registrations)
+  - `reviewer`
+  - `administrator`
+- New accounts are created inactive (`is_active = False`) and activated only after email verification.
 
-In Supabase Authentication enable Confirm email and Secure email change. Set Site URL to `http://127.0.0.1:8018` for the local demo. Use the deployed HTTPS URL for a public deployment.
+### Security Requests (`accounts.SecurityRequest`)
+- Tracks sensitive account changes: `email`, `password`, or `delete`.
+- At most one active security request per user.
+- 6-digit codes are stored as SHA-256 hashes (never in plaintext).
+- Codes expire in 10 minutes.
+- Maximum 5 failed attempts before lockout.
+- 60-second rate limit between requests.
+- Email changes require two codes: one sent to the current email and one to the new email.
+- Account deletion requires typing `DELETE`. The last remaining administrator is protected from deleting their own account.
+- Any successful sensitive change invalidates all active sessions for the user across all devices.
 
-The built-in email sender is limited to organization team addresses and a low email rate. The current dashboard requires custom SMTP to edit email templates. Its default signup template sends a confirmation link. The app handles that link and also provides code entry for templates containing `{{ .Token }}`. Custom SMTP is required for general public registrations and to customize signup, Magic link/OTP, and Change email templates to show codes. Email-code account changes cannot be demonstrated with link-only templates.
+---
 
-## Start
+## Setup & Running Locally
 
-    python -m pip install -r requirements.txt
-    python manage_accounts.py init
-    npm --prefix web ci
-    npm --prefix web run build
-    python start_app.py
+### 1. Requirements & Environment
+Ensure Python 3.12+ is installed, then install dependencies:
 
-Visit http://127.0.0.1:8018. Register, open the confirmation email, and follow its link. Alternatively enter the code if configured in the email template. No application profile or session is created before email verification. To bootstrap an administrator after registration and verification:
+```bash
+pip install -r requirements.txt
+# or for tests:
+pip install -r requirements-dev.txt
+```
 
-    python manage_accounts.py promote-admin admin@example.com
+Create or configure `.env` in the repository root:
+```env
+DATABASE_URL=postgresql://user:password@host:5432/dbname?sslmode=require
+SECRET_KEY=your-django-secret-key
+DEBUG=True
+ALLOWED_HOSTS=localhost,127.0.0.1
+# Optional: SMTP email settings (defaults to console email backend if omitted)
+EMAIL_HOST=
+EMAIL_PORT=587
+EMAIL_HOST_USER=
+EMAIL_HOST_PASSWORD=
+DEFAULT_FROM_EMAIL=InsightFlow <noreply@insightflow.app>
+```
 
-Public signups always receive the data scientist role. Roles are never taken from editable user metadata. Sessions use HttpOnly cookies, expire within one hour, and require a valid Supabase user and non-revoked Supabase session. Sign in again when expired; automatic token refresh is not implemented.
+### 2. Database Migrations
+Run Django migrations to create tables:
+```bash
+python manage.py makemigrations accounts
+python manage.py migrate
+```
 
-## Sensitive account changes
+### 3. Promoting an Administrator
+To promote an existing, verified account to administrator:
+```bash
+python manage.py promote_admin user@example.com
+```
 
-All changes require the current password. Email changes request confirmation at both addresses through Supabase secure email change. Password changes and deletion request an email OTP. The backend verifies the OTP and account identity before acting. Password values are never stored in application tables. Deletion additionally requires typing DELETE, protects the last administrator, revokes sessions, and deletes the Supabase Auth identity using the server-only PostgreSQL connection. The backend database role therefore requires access to the relevant auth tables; never expose that connection to the browser. Future Storage ownership must be handled before deleting users with uploaded files.
+### 4. Running the Development Server
+```bash
+python manage.py runserver
+```
+Visit http://127.0.0.1:8000/ to access the application.
 
-Code-based changes require SMTP templates with `{{ .Token }}`. Pending requests expire after ten minutes and permit five failed attempts. Supabase also enforces its own token lifetime and request limits. Wrong or expired codes cannot modify the account.
+---
 
-## Project memberships and platform administration
+## Role-Based Access Control
 
-See [Private workspaces](project-workspaces.md) for the current permission model and updated backlog. Account-level `administrator` grants platform account management only. Existing `data_scientist` and `reviewer` profile values are legacy ordinary-member classifications; project permissions come exclusively from project membership. The legacy `/api/workspaces/{workspace}` route now returns 410 to require a project identifier.
+- **Data Scientist**:
+  - Home directs to `/workspaces/preparation`
+  - Forbidden from `/workspaces/review` (403) and `/manage/accounts` (403)
+- **Reviewer**:
+  - Home directs to `/workspaces/review`
+  - Forbidden from `/workspaces/preparation` (403) and `/manage/accounts` (403)
+- **Administrator**:
+  - Home directs to `/manage/accounts`
+  - Can change roles of other users
+  - Cannot demote themselves
+  - Forbidden from `/workspaces/*` (403)
 
-Initial setup now applies `database/projects.sql` as well as the authentication schema. Existing installations can run `python manage_accounts.py init` again; both schema files are additive and idempotent. A verified user gets one personal project, including existing users on their next project-list request. Account deletion requires transfer or deletion of owned projects first.
+---
 
-## Running the tests
+## Testing
 
-Set `INSIGHTFLOW_TEST_DATABASE_URL` to a disposable PostgreSQL database and run `python -m pytest`. Tests mock the Supabase HTTP boundary and exercise the API with a real database, including pending signup, wrong codes, role permissions, password changes, deletion, and session revocation. Real email delivery must be checked in the recipient inbox; automated tests do not claim delivery.
+Run tests using pytest or Django's test runner:
+```bash
+pytest
+# or
+python manage.py test accounts
+```
+All tests use the in-memory email backend (`locmem`).

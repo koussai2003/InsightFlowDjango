@@ -1,6 +1,6 @@
 # InsightFlow
 
-InsightFlow is a planned data science workspace for cleaning, versioning and evaluating CSV datasets. The first implementation covers registration and role-based access with FastAPI, Vue and Supabase Auth and PostgreSQL. See [account setup and tests](docs/accounts.md) to run it.
+InsightFlow is a planned data science workspace for cleaning, versioning and evaluating CSV datasets. The first implementation covers registration and role-based access with Django, Django templates and PostgreSQL. See [account setup and tests](docs/accounts.md) to run it.
 
 ## Planned workflow
 
@@ -26,8 +26,9 @@ The initial Jira backlog contains five stories (16 Fibonacci story points): acco
 
 ## Proposed technology
 
-Vue 3 and Vite for the interface; FastAPI for the API; PostgreSQL for application metadata; Pandas, NumPy and scikit-learn for data processing and model evaluation. These are proposed choices and may change during design.
+Django 5.2 LTS and Django server-rendered templates for the web interface and access control; PostgreSQL for application metadata; Pandas, NumPy and scikit-learn for data processing and model evaluation.
 
 ## Collaboration
 
 Use Jira for stories and sprint tracking. Work in small branches, open pull requests for review, and link them to the relevant Jira story. Keep secrets and real datasets out of the repository.
+# InsightFlowDjango

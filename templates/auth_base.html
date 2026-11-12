@@ -1,0 +1,48 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}InsightFlow{% endblock %} · InsightFlow</title>
+  <link rel="stylesheet" href="{% static 'css/style.css' %}">
+  <style>
+    /* Auth-specific extras */
+    .notice { margin-top: 20px; }
+    .form-error { color: #a33b2e; font-size: 13px; margin-top: 4px; }
+    .input-error { border-color: #d9574a !important; }
+  </style>
+</head>
+<body>
+<div class="auth-layout">
+  <aside class="auth-story">
+    <span class="brand">
+      <svg width="38" height="38" viewBox="0 0 38 38" fill="none" aria-hidden="true">
+        <rect width="38" height="38" rx="10" fill="#b7e9f3" fill-opacity=".18"/>
+        <circle cx="19" cy="19" r="8" stroke="#b7e9f3" stroke-width="2.5"/>
+        <circle cx="19" cy="19" r="3" fill="#b7e9f3"/>
+      </svg>
+      <span>Insight<span class="brand-dot">.</span>Flow</span>
+    </span>
+    <div class="auth-story-copy">
+      <span class="eyebrow">A LITTLE CLARITY GOES A LONG WAY</span>
+      <h2>Your data.<br>Your questions.<br><em>Your next insight.</em></h2>
+      <p>A thoughtful space to understand, prepare, and explore your data.</p>
+      <div class="abstract-chart" aria-hidden="true">
+        <i></i><i></i><i></i><i></i><i></i><i></i>
+        <span>From possibility to perspective</span>
+      </div>
+    </div>
+    <small>INSIGHTFLOW / DATA, WITH DIRECTION.</small>
+  </aside>
+  <main class="auth-main">
+    <div class="mobile-brand">
+      <span class="brand">Insight<span class="brand-dot">.</span>Flow</span>
+    </div>
+    <section class="auth-card">
+      {% block auth_content %}{% endblock %}
+    </section>
+    <span class="auth-footnote">A clearer view starts here.</span>
+  </main>
+</div>
+</body>
+</html>

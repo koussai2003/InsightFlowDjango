@@ -1,0 +1,568 @@
+{% extends "app_base.html" %}
+{% block title %}{{ selected.name|default:"Projects" }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  .project-header-bar {
+    display: flex; justify-content: space-between; align-items: center; padding: 22px 42px;
+    border-bottom: 1px solid var(--line); background: white; flex-wrap: wrap; gap: 16px;
+  }
+  .project-meta { display: flex; align-items: center; gap: 12px; }
+  .project-meta h1 { font-size: 22px; font-weight: 700; color: var(--ink); margin: 0; }
+  .role-pill {
+    font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 20px;
+    background: #e5f2f5; color: #23545d; border: 1px solid #d0e4e8; text-transform: capitalize;
+  }
+  .project-header-actions { display: flex; align-items: center; gap: 10px; }
+  .tab-pill-group {
+    display: flex; background: #eef4f5; padding: 3px; border-radius: 9px; gap: 2px;
+  }
+  .tab-pill {
+    padding: 6px 14px; font-size: 13px; font-weight: 600; border-radius: 7px;
+    text-decoration: none; color: #627275; border: 0; transition: background 0.15s, color 0.15s;
+  }
+  .tab-pill.active { background: white; color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .invite-btn {
+    display: flex; align-items: center; gap: 6px; padding: 8px 16px; background: var(--ink);
+    color: white; border: 0; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .invite-btn:hover { background: #1b4b54; }
+
+  /* Members view */
+  .members-grid { display: grid; gap: 24px; max-width: 820px; padding: 32px 42px; }
+  .card-panel { background: white; border: 1px solid var(--line); border-radius: 12px; padding: 24px; }
+  .card-panel h2 { font-size: 17px; margin-bottom: 6px; color: var(--ink); }
+  .card-subtitle { font-size: 13px; color: var(--muted); margin-bottom: 18px; line-height: 1.5; }
+  .member-row {
+    display: flex; align-items: center; justify-content: space-between; padding: 12px 0;
+    border-bottom: 1px solid #edf1f2; gap: 14px;
+  }
+  .member-row:last-child { border-bottom: 0; }
+  .member-info { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .member-avatar {
+    width: 34px; height: 34px; border-radius: 50%; background: #e3ecee; color: #284c53;
+    display: grid; place-items: center; font-weight: 700; font-size: 13px; flex-shrink: 0;
+  }
+  .member-details strong { font-size: 13px; color: var(--ink); display: block; overflow: hidden; text-overflow: ellipsis; }
+  .member-details small { font-size: 11px; color: var(--muted); }
+  .role-select {
+    padding: 6px 10px; font-size: 12px; border-radius: 6px; border: 1px solid #d5dedf;
+    background: white; color: var(--ink);
+  }
+  .btn-danger-outline {
+    background: transparent; color: #b23930; border: 1px solid #f0cfcb; padding: 6px 12px;
+    border-radius: 6px; font-size: 12px; cursor: pointer;
+  }
+  .btn-danger-outline:hover { background: #fdf3f2; }
+  .role-option-box {
+    border: 1px solid #dbe4e6; border-radius: 8px; padding: 12px; margin-bottom: 10px;
+    display: flex; align-items: flex-start; gap: 10px; cursor: pointer;
+  }
+  .role-option-box:hover { border-color: #6a9da7; background: #fafdfd; }
+  .role-option-box input { width: auto; margin-top: 3px; }
+  .role-option-text strong { display: block; font-size: 13px; color: var(--ink); }
+  .role-option-text small { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
+</style>
+{% endblock %}
+
+{% block app_content %}
+<div class="workspace-page">
+
+  <!-- TOP HEADER FOR CURRENT PROJECT -->
+  {% if selected and view != 'invitations' %}
+    <header class="project-header-bar">
+      <div class="project-meta">
+        <h1>{{ selected.name }}</h1>
+        <span class="role-pill">{{ role|title }}</span>
+      </div>
+
+      <div class="project-header-actions">
+        <!-- Switch between Studio and Members -->
+        <nav class="tab-pill-group" aria-label="Project tabs">
+          <a href="/projects?project={{ selected.id }}&view=studio" class="tab-pill {% if view == 'studio' %}active{% endif %}">
+            📊 Data Studio
+          </a>
+          <a href="/projects?project={{ selected.id }}&view=members" class="tab-pill {% if view == 'members' %}active{% endif %}">
+            👥 Members ({{ members|length }})
+          </a>
+          {% if is_owner %}
+            <a href="/projects?project={{ selected.id }}&view=settings" class="tab-pill {% if view == 'settings' %}active{% endif %}">
+              ⚙️ Settings
+            </a>
+          {% endif %}
+        </nav>
+
+        {% if can_manage %}
+          <button type="button" class="invite-btn" onclick="openInviteModal()">
+            <span>＋</span> Invite Collaborator
+          </button>
+        {% endif %}
+      </div>
+    </header>
+  {% endif %}
+
+  <!-- VIEW 1: DATA STUDIO & CHAT -->
+  {% if view == 'studio' %}
+    {% if selected and role == 'reviewer' %}
+      <div class="settings-content" style="margin-top:30px;">
+        <span class="eyebrow">REVIEW WORKSPACE</span>
+        <h1>{{ selected.name }}</h1>
+        <div class="card-panel" style="margin-top:20px;">
+          <h2>Reviewer access</h2>
+          <p class="card-subtitle">
+            You are a <strong>Reviewer</strong> in this project. As a reviewer, you will evaluate datasets, inspect transformations, and approve cleaning decisions once the dataset review workflow is ready.
+          </p>
+        </div>
+      </div>
+    {% elif selected %}
+      <div class="studio-body">
+        <div class="welcome">
+          <span class="studio-mark" aria-hidden="true">IF<span>✦</span></span>
+          <span class="eyebrow">{{ selected.name|upper }} · DATA STUDIO</span>
+          <h2>Good questions.<br><span>Clearer insights.</span></h2>
+          <p>Attach a CSV dataset or start with a question.<br>InsightFlow helps you inspect, understand, and prepare your data.</p>
+        </div>
+
+        <!-- Conversation & Questions History -->
+        {% if questions %}
+          <section class="conversation" aria-label="Questions history">
+            {% for q in questions %}
+              <article class="question">
+                <span class="eyebrow">{{ q.user.email }} {% if q.dataset_name %}· 📄 {{ q.dataset_name }}{% endif %}</span>
+                <p>{{ q.question }}</p>
+                <small>{{ q.created_at|date:"M d, Y - H:i" }} · Question saved in project</small>
+              </article>
+            {% endfor %}
+          </section>
+        {% endif %}
+
+        <!-- Interactive Question & Dataset Composer -->
+        <form class="composer" method="post" action="/projects/{{ selected.id }}/ask" id="composerForm">
+          {% csrf_token %}
+          <input type="hidden" name="dataset_name" id="datasetNameInput" value="">
+          <label class="sr-only" for="promptInput">Ask a question about your data</label>
+          <textarea id="promptInput" name="prompt" placeholder="What would you like to understand about your dataset?" maxlength="4000" required></textarea>
+
+          <div class="attachment" id="attachmentBadge" style="display:none;">
+            <span class="file-icon">CSV</span>
+            <span>
+              <strong id="attachmentFileName">dataset.csv</strong>
+              <small id="attachmentFileInfo">0 KB · 0 columns</small>
+            </span>
+            <button class="icon-button" type="button" aria-label="Remove dataset" onclick="clearAttachedFile()">×</button>
+          </div>
+
+          <div class="composer-toolbar">
+            <button type="button" class="attach-button" onclick="document.getElementById('fileUploadInput').click()">
+              <span aria-hidden="true">＋</span> Attach CSV dataset
+            </button>
+            <span class="file-hint">CSV · up to 10 MB</span>
+            <button class="send-button" type="submit" aria-label="Send question" title="Send question">↑</button>
+          </div>
+        </form>
+
+        <!-- Hidden form for saving CSV file -->
+        <form id="uploadForm" method="post" action="/projects/{{ selected.id }}/upload" enctype="multipart/form-data" style="display:none;">
+          {% csrf_token %}
+          <input type="file" id="fileUploadInput" name="file" accept=".csv,text/csv" onchange="handleFileSelect(event)">
+        </form>
+
+        <p class="notice error" id="clientError" role="alert" style="display:none;"></p>
+
+        <!-- Quick Suggestions -->
+        <div class="suggestions">
+          <button type="button" onclick="setPrompt('Help me understand the distribution of values in this dataset')">Distribution of values <span aria-hidden="true">↗</span></button>
+          <button type="button" onclick="setPrompt('What missing values or outliers should I clean first?')">Find missing values <span aria-hidden="true">↗</span></button>
+          <button type="button" onclick="setPrompt('Which features have the strongest correlation?')">Correlation check <span aria-hidden="true">↗</span></button>
+        </div>
+
+        <!-- Live Instant Dataset Preview Table -->
+        <section class="dataset-preview" id="datasetPreviewSection" style="display:none;">
+          <div class="section-heading">
+            <div>
+              <span class="eyebrow">DATASET PREVIEW</span>
+              <h3 id="previewTitle">File.csv</h3>
+            </div>
+            <span id="previewSubtitle">First rows</span>
+          </div>
+          <div class="table-scroll">
+            <table id="previewTable">
+              <thead id="previewThead"></thead>
+              <tbody id="previewTbody"></tbody>
+            </table>
+          </div>
+          <div style="padding:14px 20px;background:#f8fbfb;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:12px;color:var(--muted)">Preview loaded in browser session</span>
+            <button type="button" onclick="document.getElementById('uploadForm').submit()" style="font-size:12px;padding:8px 16px;">
+              💾 Save dataset to project
+            </button>
+          </div>
+        </section>
+
+        <!-- Saved Datasets in this Project -->
+        {% if datasets %}
+          <div style="margin-top:35px;">
+            <span class="eyebrow" style="color:#6d8489;">SAVED PROJECT DATASETS</span>
+            {% for ds in datasets %}
+              <section class="dataset-preview" style="margin-top:12px;">
+                <div class="section-heading">
+                  <div>
+                    <span class="eyebrow">UPLOADED {{ ds.created_at|date:"M d, Y" }}</span>
+                    <h3>📄 {{ ds.name }}</h3>
+                  </div>
+                  <span>{{ ds.row_count }} rows · {{ ds.column_count }} columns</span>
+                </div>
+                <div class="table-scroll">
+                  <table>
+                    <thead>
+                      <tr>
+                        {% for col in ds.column_names %}<th>{{ col }}</th>{% endfor %}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for row in ds.preview_rows %}
+                        <tr>
+                          {% for val in row %}<td>{{ val }}</td>{% endfor %}
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            {% endfor %}
+          </div>
+        {% endif %}
+
+        <div class="workflow-strip">
+          <span><b>01</b> Understand</span><span class="flow-line"></span>
+          <span><b>02</b> Prepare</span><span class="flow-line"></span>
+          <span><b>03</b> Explore</span><span class="flow-line"></span>
+          <span><b>04</b> Evaluate</span>
+        </div>
+      </div>
+    {% else %}
+      <div class="settings-content" style="margin-top:40px;">
+        <h1>No projects yet</h1>
+        <p class="page-intro">Click <strong>+ New Project</strong> on the left sidebar to start your first project.</p>
+      </div>
+    {% endif %}
+
+  <!-- VIEW 2: PROJECT MEMBERS & COLLABORATORS -->
+  {% elif view == 'members' and selected %}
+    <div class="members-grid">
+      <!-- Members List Card -->
+      <div class="card-panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+          <div>
+            <h2>Project Members</h2>
+            <p class="card-subtitle" style="margin-bottom:0;">People who have access to <strong>{{ selected.name }}</strong></p>
+          </div>
+          {% if can_manage %}
+            <button type="button" class="invite-btn" onclick="openInviteModal()">
+              <span>＋</span> Invite Member
+            </button>
+          {% endif %}
+        </div>
+
+        <div>
+          {% for m in members %}
+            <div class="member-row">
+              <div class="member-info">
+                <span class="member-avatar">{{ m.email|first|upper }}</span>
+                <div class="member-details">
+                  <strong>{{ m.email }} {% if m.id == user.id %}<span class="primary-badge">You</span>{% endif %}</strong>
+                  <small>{{ m.role|title }}{% if m.is_owner %} · Project Owner{% endif %}</small>
+                </div>
+              </div>
+
+              <div style="display:flex;align-items:center;gap:10px;">
+                {% if can_manage and not m.is_owner and is_owner or can_manage and not m.is_owner and m.role != 'moderator' %}
+                  <form method="post" action="/projects/{{ selected.id }}/members/{{ m.id }}/role" style="margin:0;">
+                    {% csrf_token %}
+                    <select name="role" class="role-select" onchange="this.form.submit()">
+                      {% if is_owner %}<option value="moderator" {% if m.role == 'moderator' %}selected{% endif %}>Moderator</option>{% endif %}
+                      <option value="data_scientist" {% if m.role == 'data_scientist' %}selected{% endif %}>Data Scientist</option>
+                      <option value="reviewer" {% if m.role == 'reviewer' %}selected{% endif %}>Reviewer</option>
+                    </select>
+                  </form>
+                {% else %}
+                  <span class="role-pill">{{ m.role|title }}</span>
+                {% endif %}
+
+                {% if not m.is_owner %}
+                  {% if m.id == user.id or is_owner or is_moderator and m.role != 'moderator' %}
+                    <form method="post" action="/projects/{{ selected.id }}/members/{{ m.id }}/remove" style="margin:0;" onsubmit="return confirm('{% if m.id == user.id %}Leave this project?{% else %}Remove {{ m.email }}?{% endif %}');">
+                      {% csrf_token %}
+                      <button type="submit" class="btn-danger-outline">
+                        {% if m.id == user.id %}Leave{% else %}Remove{% endif %}
+                      </button>
+                    </form>
+                  {% endif %}
+                {% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Pending Invitations Card -->
+      {% if sent_invites %}
+        <div class="card-panel">
+          <h2>Pending Invitations</h2>
+          <p class="card-subtitle">Invitations sent for this project that have not yet been accepted.</p>
+          {% for inv in sent_invites %}
+            <div class="member-row">
+              <div class="member-info">
+                <span class="member-avatar" style="background:#eaf0f2;color:#678a91;">✉</span>
+                <div class="member-details">
+                  <strong>{{ inv.email }}</strong>
+                  <small>Role: {{ inv.get_role_display }} · Expires {{ inv.expires_at|date:"M d, Y" }}</small>
+                </div>
+              </div>
+              {% if is_owner or inv.role != 'moderator' %}
+                <form method="post" action="/projects/{{ selected.id }}/invitations/{{ inv.id }}/revoke" style="margin:0;">
+                  {% csrf_token %}
+                  <button type="submit" class="btn-danger-outline">Revoke</button>
+                </form>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+
+  <!-- VIEW 3: PROJECT SETTINGS (OWNER ONLY) -->
+  {% elif view == 'settings' and selected and is_owner %}
+    <div class="members-grid">
+      <div class="card-panel">
+        <h2>Transfer Ownership</h2>
+        <p class="card-subtitle">Transfer full ownership of <strong>{{ selected.name }}</strong> to another member. You will remain in the project as a Moderator.</p>
+        <form method="post" action="/projects/{{ selected.id }}/transfer">
+          {% csrf_token %}
+          <label>
+            Select Existing Project Member
+            <select name="new_owner_id" required>
+              <option value="" disabled selected>Choose a collaborator...</option>
+              {% for m in members %}
+                {% if m.id != user.id %}
+                  <option value="{{ m.id }}">{{ m.email }} ({{ m.role|title }})</option>
+                {% endif %}
+              {% endfor %}
+            </select>
+          </label>
+          <label class="confirm-check">
+            <input type="checkbox" required> I understand that this member will assume full ownership of the project.
+          </label>
+          <button type="submit">Transfer Ownership</button>
+        </form>
+      </div>
+
+      <div class="card-panel" style="border-color:#f5c6c2;">
+        <h2 style="color:#b23930;">Delete Project</h2>
+        <p class="card-subtitle">Permanently delete this project, including its datasets, chat history, and memberships. This cannot be undone.</p>
+        <form method="post" action="/projects/{{ selected.id }}/delete">
+          {% csrf_token %}
+          <label>
+            Type <strong>{{ selected.name }}</strong> to confirm deletion
+            <input type="text" name="confirmation" required autocomplete="off">
+          </label>
+          <button type="submit" style="background:#b23930;">Permanently Delete Project</button>
+        </form>
+      </div>
+    </div>
+
+  <!-- VIEW 4: INVITATIONS INBOX -->
+  {% elif view == 'invitations' %}
+    <div class="members-grid">
+      <div class="card-panel">
+        <span class="eyebrow">YOUR INBOX</span>
+        <h2>Project Invitations</h2>
+        <p class="card-subtitle">Pending invitations sent to your email ({{ user.email }}). Accept to collaborate in shared workspaces.</p>
+
+        {% for inv in inbox %}
+          <div class="member-row" style="padding:16px 0;">
+            <div class="member-info">
+              <span class="member-avatar" style="background:#d8eaee;color:#18535d;">📁</span>
+              <div class="member-details">
+                <strong style="font-size:15px;">{{ inv.project.name }}</strong>
+                <small>Invited as <strong>{{ inv.get_role_display }}</strong> · Expires {{ inv.expires_at|date:"M d, Y" }}</small>
+              </div>
+            </div>
+            <div style="display:flex;gap:10px;">
+              <form method="post" action="/projects/invitations/{{ inv.id }}/accept" style="margin:0;">
+                {% csrf_token %}
+                <button type="submit">Accept</button>
+              </form>
+              <form method="post" action="/projects/invitations/{{ inv.id }}/decline" style="margin:0;">
+                {% csrf_token %}
+                <button type="submit" class="btn-danger-outline">Decline</button>
+              </form>
+            </div>
+          </div>
+        {% empty %}
+          <p style="font-size:13px;color:var(--muted);padding:10px 0;">You have no pending invitations.</p>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+</div>
+
+<!-- MODAL: INVITE COLLABORATOR -->
+{% if selected and can_manage %}
+  <div id="inviteModal" class="modal-backdrop" onclick="if(event.target === this) closeInviteModal()">
+    <div class="modal-card">
+      <button type="button" class="modal-close" onclick="closeInviteModal()">×</button>
+      <h2>Invite to {{ selected.name }}</h2>
+      <p>Invite a colleague by email and select the project role that fits their responsibilities.</p>
+
+      <form method="post" action="/projects/{{ selected.id }}/invite">
+        {% csrf_token %}
+        <label>
+          Collaborator Email
+          <input type="email" name="email" required maxlength="254" placeholder="colleague@example.com" autofocus>
+        </label>
+
+        <div style="margin:16px 0 20px;">
+          <span style="display:block;font-size:13px;font-weight:600;margin-bottom:8px;">Assign Project Role:</span>
+
+          <!-- Reviewer option -->
+          <label class="role-option-box">
+            <input type="radio" name="role" value="reviewer" checked>
+            <div class="role-option-text">
+              <strong>🔍 Reviewer</strong>
+              <small>Reviews data cleaning, inspects models, and approves/comments on datasets.</small>
+            </div>
+          </label>
+
+          <!-- Moderator option (Owner only) -->
+          {% if is_owner %}
+            <label class="role-option-box">
+              <input type="radio" name="role" value="moderator">
+              <div class="role-option-text">
+                <strong>🛡️ Moderator</strong>
+                <small>Can invite and manage Data Scientists and Reviewers in this project.</small>
+              </div>
+            </label>
+          {% endif %}
+
+          <!-- Data Scientist option -->
+          <label class="role-option-box">
+            <input type="radio" name="role" value="data_scientist">
+            <div class="role-option-text">
+              <strong>🔬 Data Scientist</strong>
+              <small>Uploads CSV datasets, asks questions, and prepares dataset versions.</small>
+            </div>
+          </label>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;gap:10px;">
+          <button type="button" class="link" onclick="closeInviteModal()">Cancel</button>
+          <button type="submit">Send Invitation</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    function openInviteModal() {
+      document.getElementById('inviteModal').classList.add('open');
+    }
+    function closeInviteModal() {
+      document.getElementById('inviteModal').classList.remove('open');
+    }
+  </script>
+{% endif %}
+
+<script>
+  function setPrompt(text) {
+    const el = document.getElementById('promptInput');
+    el.value = text;
+    el.focus();
+  }
+
+  function parseCSV(text) {
+    const rows = [];
+    let row = [], field = '', quoted = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (c === '"') {
+        if (quoted && text[i + 1] === '"') { field += '"'; i++; }
+        else if (!field || quoted) quoted = !quoted;
+        else field += c;
+      } else if (c === ',' && !quoted) {
+        row.push(field); field = '';
+      } else if ((c === '\n' || c === '\r') && !quoted) {
+        if (c === '\r' && text[i + 1] === '\n') i++;
+        row.push(field);
+        if (row.some(v => v.trim())) rows.push(row);
+        row = []; field = '';
+        if (rows.length === 6) return rows;
+      } else {
+        field += c;
+      }
+    }
+    if (quoted) throw new Error('The CSV has an unclosed quoted field.');
+    row.push(field);
+    if (row.some(v => v.trim())) rows.push(row);
+    return rows;
+  }
+
+  function handleFileSelect(event) {
+    const file = event.target.files[0];
+    const errBox = document.getElementById('clientError');
+    errBox.style.display = 'none';
+
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      errBox.innerText = 'Choose a CSV file to preview your dataset.';
+      errBox.style.display = 'block';
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      errBox.innerText = 'Please choose a CSV smaller than 10 MB.';
+      errBox.style.display = 'block';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        const text = e.target.result.replace(/^\uFEFF/, '');
+        const rows = parseCSV(text);
+        if (!rows.length) throw new Error('File is empty.');
+
+        const headers = rows[0];
+        const previewRows = rows.slice(1);
+
+        document.getElementById('attachmentFileName').innerText = file.name;
+        document.getElementById('attachmentFileInfo').innerText = (file.size / 1024).toFixed(1) + ' KB · ' + headers.length + ' columns';
+        document.getElementById('attachmentBadge').style.display = 'flex';
+        document.getElementById('datasetNameInput').value = file.name;
+
+        document.getElementById('previewTitle').innerText = file.name;
+        document.getElementById('previewSubtitle').innerText = 'First ' + previewRows.length + ' rows';
+
+        const thead = document.getElementById('previewThead');
+        thead.innerHTML = '<tr>' + headers.map((h, i) => '<th>' + (h || 'Column ' + (i+1)) + '</th>').join('') + '</tr>';
+
+        const tbody = document.getElementById('previewTbody');
+        tbody.innerHTML = previewRows.map(r => '<tr>' + headers.map((_, j) => '<td>' + (r[j] ?? '—') + '</td>').join('') + '</tr>').join('');
+
+        document.getElementById('datasetPreviewSection').style.display = 'block';
+      } catch (err) {
+        errBox.innerText = err.message;
+        errBox.style.display = 'block';
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function clearAttachedFile() {
+    document.getElementById('fileUploadInput').value = '';
+    document.getElementById('attachmentBadge').style.display = 'none';
+    document.getElementById('datasetPreviewSection').style.display = 'none';
+    document.getElementById('datasetNameInput').value = '';
+  }
+</script>
+{% endblock %}

@@ -1,0 +1,38 @@
+{% extends "auth_base.html" %}
+{% block title %}Sign in{% endblock %}
+{% block auth_content %}
+<span class="eyebrow">LET'S GET STARTED</span>
+<h1>Sign in</h1>
+
+{% if messages %}
+  {% for message in messages %}
+    <p class="notice {% if message.tags == 'error' %}error{% endif %}" role="{% if message.tags == 'error' %}alert{% else %}status{% endif %}" aria-live="polite">{{ message }}</p>
+  {% endfor %}
+{% endif %}
+
+<form method="post" action="/login">
+  {% csrf_token %}
+  {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+  <label>
+    Email
+    <input type="email" name="email" value="{{ form.email.value|default:'' }}"
+           autocomplete="email" required
+           {% if form.email.errors %}class="input-error"{% endif %}>
+    {% for error in form.email.errors %}<span class="form-error">{{ error }}</span>{% endfor %}
+  </label>
+  <label>
+    Password
+    <input type="password" name="password" maxlength="128"
+           autocomplete="current-password" required
+           {% if form.password.errors %}class="input-error"{% endif %}>
+    {% for error in form.password.errors %}<span class="form-error">{{ error }}</span>{% endfor %}
+  </label>
+  {% if form.non_field_errors %}
+    {% for error in form.non_field_errors %}
+      <p class="notice error" role="alert">{{ error }}</p>
+    {% endfor %}
+  {% endif %}
+  <button type="submit">Sign in</button>
+</form>
+<a class="link" href="/register">Create an account</a>
+{% endblock %}

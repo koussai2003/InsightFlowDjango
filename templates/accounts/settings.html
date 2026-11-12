@@ -1,0 +1,49 @@
+{% extends "app_base.html" %}
+{% block title %}Account settings{% endblock %}
+{% block app_content %}
+<div class="workspace-page">
+  <header class="page-header">
+    <div>
+      <span class="eyebrow">YOUR ACCOUNT</span>
+      <h1>Account settings</h1>
+    </div>
+    <span class="status-pill"><i></i> {{ user.get_role_display }}</span>
+  </header>
+  <div class="settings-content">
+    <p class="page-intro">Manage your details and keep your account secure.</p>
+
+    <div class="profile-card">
+      <span class="avatar large">{{ user.email|first|upper }}</span>
+      <div>
+        <h2>{{ user.get_role_display }}</h2>
+        <p>{{ user.email }}</p>
+      </div>
+      <span class="profile-badge">Signed in</span>
+    </div>
+
+    <!-- Email change -->
+    <div class="settings-panel">
+      <h2>Email address</h2>
+      <p class="panel-intro">Update the email you use to sign in and receive verification codes.</p>
+      <strong style="font-size:14px">{{ user.email }} <span style="font-size:10px;padding:2px 7px;background:#e0eef1;border-radius:20px;color:#4a7079">Primary</span></strong>
+      <div style="margin-top:16px">
+        <a href="/settings/request?action=email" class="button" style="display:inline-block;padding:10px 18px;background:var(--ink);color:white;border-radius:9px;font-weight:600;font-size:13px;text-decoration:none">Change email</a>
+      </div>
+    </div>
+
+    <!-- Password change -->
+    <div class="settings-panel">
+      <h2>Password</h2>
+      <p class="panel-intro">Choose a strong password (at least 12 characters) to protect your account.</p>
+      <a href="/settings/request?action=password" class="button" style="display:inline-block;padding:10px 18px;background:var(--ink);color:white;border-radius:9px;font-weight:600;font-size:13px;text-decoration:none">Change password</a>
+    </div>
+
+    <!-- Danger zone -->
+    <div class="settings-panel" style="border-color:#f5c6c2">
+      <h2>Danger zone</h2>
+      <p class="panel-intro">Permanently delete your account and end all active sessions. This cannot be undone.</p>
+      <a href="/settings/request?action=delete" style="display:inline-block;padding:10px 18px;background:#b23930;color:white;border-radius:9px;font-weight:600;font-size:13px;text-decoration:none">Delete account</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends "auth_base.html" %}
+{% block title %}Verify your email{% endblock %}
+{% block auth_content %}
+<span class="eyebrow">ONE STEP LEFT</span>
+<h1>Verify your email</h1>
+
+{% if messages %}
+  {% for message in messages %}
+    <p class="notice {% if message.tags == 'error' %}error{% endif %}" role="{% if message.tags == 'error' %}alert{% else %}status{% endif %}" aria-live="polite">{{ message }}</p>
+  {% endfor %}
+{% endif %}
+
+<div>
+  <p>We sent a verification link and a 6-digit code to <strong>{{ email }}</strong>. Click the link in the email or enter the code below.</p>
+</div>
+
+<form method="post" action="/verify">
+  {% csrf_token %}
+  <input type="hidden" name="email" value="{{ email }}">
+  <label>
+    Verification code
+    <input type="text" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6"
+           autocomplete="one-time-code" placeholder="123456" required>
+  </label>
+  <button type="submit">Verify code</button>
+</form>
+
+<form method="post" action="/verify/resend" style="margin-top:0">
+  {% csrf_token %}
+  <input type="hidden" name="email" value="{{ email }}">
+  <button type="submit" class="link">Resend verification email</button>
+</form>
+
+<a class="link" href="/login">Return to sign in</a>
+{% endblock %}

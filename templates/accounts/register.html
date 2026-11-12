@@ -1,0 +1,40 @@
+{% extends "auth_base.html" %}
+{% block title %}Create account{% endblock %}
+{% block auth_content %}
+<span class="eyebrow">LET'S GET STARTED</span>
+<h1>Create account</h1>
+
+{% if messages %}
+  {% for message in messages %}
+    <p class="notice {% if message.tags == 'error' %}error{% endif %}" role="status" aria-live="polite">{{ message }}</p>
+  {% endfor %}
+{% endif %}
+
+<form method="post" action="/register">
+  {% csrf_token %}
+  <label>
+    Email
+    <input type="email" name="email" value="{{ form.email.value|default:'' }}"
+           autocomplete="email" required
+           {% if form.email.errors %}class="input-error"{% endif %}>
+    {% for error in form.email.errors %}<span class="form-error">{{ error }}</span>{% endfor %}
+  </label>
+  <label>
+    Password
+    <input type="password" name="password" minlength="12" maxlength="128"
+           autocomplete="new-password" required
+           {% if form.password.errors %}class="input-error"{% endif %}>
+    {% for error in form.password.errors %}<span class="form-error">{{ error }}</span>{% endfor %}
+  </label>
+  <label>
+    Confirm password
+    <input type="password" name="confirm_password" maxlength="128"
+           autocomplete="new-password" required
+           {% if form.confirm_password.errors %}class="input-error"{% endif %}>
+    {% for error in form.confirm_password.errors %}<span class="form-error">{{ error }}</span>{% endfor %}
+  </label>
+  <small>Use at least 12 characters.</small>
+  <button type="submit">Create account</button>
+</form>
+<a class="link" href="/login">Sign in instead</a>
+{% endblock %}

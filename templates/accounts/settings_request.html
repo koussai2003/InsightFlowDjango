@@ -1,0 +1,73 @@
+{% extends "app_base.html" %}
+{% block title %}
+  {% if action == 'email' %}Change email{% elif action == 'password' %}Change password{% else %}Delete account{% endif %}
+{% endblock %}
+{% block app_content %}
+<div class="workspace-page">
+  <header class="page-header">
+    <div>
+      <span class="eyebrow">ACCOUNT SETTINGS</span>
+      <h1>
+        {% if action == 'email' %}Change email
+        {% elif action == 'password' %}Change password
+        {% else %}Delete account{% endif %}
+      </h1>
+    </div>
+  </header>
+  <div class="settings-content">
+    {% if messages %}
+      {% for message in messages %}
+        <p class="notice {% if message.tags == 'error' %}error{% endif %}" role="{% if message.tags == 'error' %}alert{% else %}status{% endif %}">{{ message }}</p>
+      {% endfor %}
+    {% endif %}
+
+    <div class="settings-panel">
+      {% if action == 'delete' %}
+        <p role="alert" style="color:#a53329;background:#fff1ed;padding:14px;border-radius:8px;margin-bottom:16px">
+          Deleting your account permanently removes your login and ends all active sessions. This cannot be undone.
+        </p>
+      {% endif %}
+
+      <form method="post" action="/settings/request">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="{{ action }}">
+
+        <label>
+          Current password
+          <input type="password" name="current_password" autocomplete="current-password" required maxlength="128">
+          {% for error in form.current_password.errors %}<span class="form-error">{{ error }}</span>{% endfor %}
+        </label>
+
+        {% if action == 'email' %}
+          <label>
+            New email address
+            <input type="email" name="new_email" autocomplete="email" required value="{{ form.new_email.value|default:'' }}">
+            {% for error in form.new_email.errors %}<span class="form-error">{{ error }}</span>{% endfor %}
+          </label>
+          <p style="font-size:12px;color:var(--muted)">Codes will be sent to both your current and new email addresses.</p>
+        {% elif action == 'password' %}
+          <label>
+            New password
+            <input type="password" name="new_password" minlength="12" maxlength="128" autocomplete="new-password" required>
+            {% for error in form.new_password.errors %}<span class="form-error">{{ error }}</span>{% endfor %}
+          </label>
+          <label>
+            Confirm new password
+            <input type="password" name="confirm_password" maxlength="128" autocomplete="new-password" required>
+            {% for error in form.confirm_password.errors %}<span class="form-error">{{ error }}</span>{% endfor %}
+          </label>
+          <p style="font-size:12px;color:var(--muted)">A verification code will be sent to your current email.</p>
+        {% else %}
+          <p style="font-size:12px;color:var(--muted)">A verification code will be sent to your current email.</p>
+        {% endif %}
+
+        <button type="submit" {% if action == 'delete' %}style="background:#b23930"{% endif %}>
+          Send verification code{% if action == 'email' %}s{% endif %}
+        </button>
+      </form>
+    </div>
+
+    <a class="link" href="/settings">Cancel</a>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,26 @@
+{% extends "app_base.html" %}
+{% block title %}Dataset preparation{% endblock %}
+{% block app_content %}
+<div class="workspace-page">
+  <header class="page-header">
+    <div>
+      <span class="eyebrow">WORKSPACE</span>
+      <h1>Dataset preparation</h1>
+    </div>
+    <span class="status-pill"><i></i> Data scientist</span>
+  </header>
+  <div class="studio-body">
+    <div class="welcome">
+      <div class="studio-mark">🔬<span>✦</span></div>
+      <span class="eyebrow">DATASET STUDIO</span>
+      <h2>Prepare your<br><span>datasets</span></h2>
+      <p>Import, clean and version your CSV datasets in private project workspaces.</p>
+      <div style="margin-top:20px;">
+        <a href="/projects" style="display:inline-block;padding:12px 24px;background:var(--ink);color:white;border-radius:9px;font-weight:600;text-decoration:none;">
+          Open Data Studio & Projects
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
