@@ -1,34 +1,42 @@
-# InsightFlow
+# InsightFlow — Django edition
 
-InsightFlow is a planned data science workspace for cleaning, versioning and evaluating CSV datasets. The first implementation covers registration and role-based access with Django, Django templates and PostgreSQL. See [account setup and tests](docs/accounts.md) to run it.
+This is a separate Django implementation; it does not replace or edit the Vue/FastAPI project in the parent folder. It demonstrates the requested Django topics: PostgreSQL, function-based and class-based views, ModelForms, Django authentication, WebSocket notifications, `ImageField`, and a Locust performance test.
 
-## Planned workflow
+## Run locally
 
-1. Import and validate a CSV dataset while preserving the original.
-2. Profile missing values, duplicates, column types, and basic statistics.
-3. Preview a cleaning operation, confirm it, and save a new dataset version.
-4. Explore distributions and relationships with charts and filters.
-5. Train and compare baseline classification models using consistent metrics.
-6. Add comments, review decisions, and export a report.
+1. From this folder, create a virtual environment and install `requirements.txt`.
+2. `.env` is preconfigured for a local SQLite demo. To use PostgreSQL set `USE_SQLITE=false` and set `DATABASE_URL` to a database dedicated to this Django edition.
+3. Run `python manage.py makemigrations core`, then `python manage.py migrate`.
+4. Run `python manage.py runserver 127.0.0.1:8021` for the browser/API. For WebSocket support, run `daphne -p 8021 config.asgi:application` instead.
+5. Open `http://127.0.0.1:8021/` or import `postman/InsightFlow-Django.postman_collection.json` into Postman. Requests use the cookie jar and CSRF token. Run GET CSRF token, POST sign up, POST sign in, GET refreshed CSRF token, GET projects, POST create project.
 
-An AI assistant for explaining statistics and results is optional and will be confirmed during scope review.
+## API routes
 
-## Team
+| Method | Route | Purpose |
+|---|---|---|
+| GET | `/api/health/` | Health check |
+| GET | `/api/csrf/` | Get CSRF token for Postman |
+| POST | `/api/auth/signup/` | Create account and private starter project |
+| POST | `/api/auth/login/` | Sign in; session cookie is returned |
+| POST | `/api/auth/logout/` | End session |
+| GET | `/api/me/` | Current account |
+| GET, POST | `/api/projects/` | List or create accessible projects (CBV) |
+| GET | `/api/projects/<uuid>/` | Read project (CBV) |
+| GET, POST | `/api/projects/<uuid>/invitations/` and `/new/` | List or create an invitation (FBV) |
+| GET | `/api/invitations/` | Current user's pending invitations |
+| POST | `/api/invitations/<uuid>/respond/` | Accept or decline, JSON action |
+| POST | `/api/profile/avatar/` | Upload account image (`ImageField`) |
+| POST | `/api/projects/<uuid>/datasets/` | Upload CSV file |
 
-- Rayen Selmi: data processing, AI and machine learning; Scrum Master.
-- Aziz Labidi: backend, database, authentication and access control.
-- Koussai Khelifi: frontend, user experience and charts.
-- Shared responsibility: testing, integration, documentation and code review.
+## Requirement mapping
 
-## Sprint 1: authentication and profiles
+- PostgreSQL: `config/settings.py` reads `DATABASE_URL`; SQLite is only a local demo fallback.
+- CBV: `ProjectListCreateView` and `ProjectDetailView` implement project GET/POST behavior.
+- FBV: health, auth, invitation, image, and dataset endpoints are function-based.
+- ModelForm: account signup, project creation, avatar and dataset forms are in `core/forms.py`.
+- Auth: Django's password hashing, session login, logout, and `login_required` protect private endpoints.
+- WebSocket notifications: `/ws/notifications/` requires an authenticated session; in-memory channels work for one local server. Start the ASGI version using `daphne -p 8020 config.asgi:application` after installing dependencies. For multiple workers configure Redis and install `channels-redis`.
+- ImageField: `User.avatar` stores profile images under `media/avatars/`.
+- Performance: `locustfile.py` has a small health/CSRF workload. A local 20-user, 30-second run and its limitations are recorded in [the performance report](performance/PERFORMANCE_TEST_REPORT.md); the CSV output is saved in `performance/`.
 
-The initial Jira backlog contains five stories (16 Fibonacci story points): account registration, login, logout, profile editing, and role-based permissions. See the [Sprint 1 backlog](https://selmirayen369963.atlassian.net/jira/software/projects/IF/boards/3/backlog). Story points represent relative effort and uncertainty, not elapsed time. Sprint dates and duration should be reviewed with the team.
-
-## Proposed technology
-
-Django 5.2 LTS and Django server-rendered templates for the web interface and access control; PostgreSQL for application metadata; Pandas, NumPy and scikit-learn for data processing and model evaluation.
-
-## Collaboration
-
-Use Jira for stories and sprint tracking. Work in small branches, open pull requests for review, and link them to the relevant Jira story. Keep secrets and real datasets out of the repository.
-# InsightFlowDjango
+This is the Django foundation for the account and project collaboration parts of InsightFlow. The CSV route stores uploads; data cleaning, EDA, model training and the prompt assistant still need their own implementation.

@@ -1,13 +1,18 @@
-{% load static %}<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}InsightFlow{% endblock %}</title>
-  <link rel="stylesheet" href="{% static 'css/style.css' %}">
-  {% block extra_head %}{% endblock %}
-</head>
+{% load static %}<!doctype html>
+<html lang="en" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#171e23"><title>{% block title %}InsightFlow{% endblock %}</title><link rel="stylesheet" href="{% static 'app.css' %}"></head>
 <body>
-{% block body %}{% endblock %}
-</body>
-</html>
+{% if user.is_authenticated %}
+<div class="app-shell">
+ <aside class="sidebar">
+  <a href="/" class="brand"><span class="brand-mark">IF</span><span>InsightFlow<span class="brand-dot">.</span></span></a>
+  <div class="project-tools"><a class="new-project" href="{% url 'project-new' %}"><span>＋</span> New project</a><label class="search"><span aria-hidden="true">⌕</span><input id="project-search" type="search" placeholder="Search projects" autocomplete="off"></label></div>
+  <div class="project-label">Your projects</div>
+  <nav class="project-list" id="project-list" aria-label="Your projects">
+   {% for project in nav_projects %}<a class="project-link {% if selected.id == project.id %}active{% endif %}" href="/?project={{ project.id }}"><span class="project-glyph">▱</span><span class="project-name">{{ project.name }}</span>{% if project.owner_id == user.id %}<span class="owner-dot" title="Owner">●</span>{% endif %}</a>{% empty %}<p class="empty-sidebar">Your projects will appear here.</p>{% endfor %}
+  </nav>
+  <div class="sidebar-bottom"><a href="{% url 'account' %}" class="side-action">⚙ <span>Account settings</span></a><div class="user-row"><span class="avatar">{% if user.avatar %}<img src="{{ user.avatar.url }}" alt="">{% else %}{{ user.email|first|upper }}{% endif %}</span><span class="user-email" title="{{ user.email }}">{{ user.email }}</span><form action="{% url 'logout' %}" method="post">{% csrf_token %}<button class="icon-button" title="Sign out" aria-label="Sign out">↪</button></form></div></div>
+ </aside>
+ <main class="main-area"><header class="topbar"><div class="topbar-title">{% block topbar %}InsightFlow{% endblock %}</div><span class="topbar-caption">Your data, understood.</span></header>{% block content %}{% endblock %}</main>
+</div><button class="theme-toggle" id="theme-toggle" title="Switch theme" aria-label="Switch between light and dark mode">◐</button><script src="{% static 'app.js' %}" defer></script>
+{% else %}<main class="auth-shell"><a href="/" class="brand auth-brand"><span class="brand-mark">IF</span><span>InsightFlow<span class="brand-dot">.</span></span></a>{% block auth_content %}{% endblock %}</main>{% endif %}
+</body></html>

@@ -1,0 +1,15 @@
+{% extends "base.html" %}{% block title %}{{ selected.name|default:'InsightFlow' }} · InsightFlow{% endblock %}{% block topbar %}{% if selected %}{{ selected.name }}{% else %}InsightFlow{% endif %}{% endblock %}{% block content %}
+<section class="workspace-page">
+ {% if selected %}<div class="workspace-heading"><div><span class="eyebrow">PROJECT WORKSPACE · {{ project_role|upper }}</span><h1>{{ selected.name }}</h1></div><a class="subtle-button" href="{% url 'project-new' %}">＋ New project</a></div>
+ <div class="studio-body" id="studio">
+  <div class="welcome" id="welcome"><span class="studio-mark">IF</span><h2>What’s in your data?</h2><p>Bring a dataset. Ask a question. Find a starting point.</p></div>
+  <section class="conversation" id="conversation" aria-live="polite"></section>
+  <section class="dataset-preview hidden" id="dataset-preview"><div class="section-heading"><div><span class="eyebrow">DATASET PREVIEW</span><h3 id="dataset-name"></h3></div><span id="dataset-count"></span></div><div class="table-scroll"><table id="preview-table"></table></div></section>
+  <div class="composer-area"><form class="composer" id="question-form"><label class="sr-only" for="question">Ask about the dataset</label><textarea id="question" placeholder="What would you like to understand about your data?" rows="2" maxlength="4000"></textarea><div class="composer-tools"><label class="attach-button" for="csv-file">＋ Attach dataset</label><input class="hidden" id="csv-file" type="file" accept=".csv,text/csv"><span class="file-hint" id="file-hint">CSV · up to 10 MB</span><button class="send-button" aria-label="Send question">↑</button></div></form>
+   <div class="suggestions" id="suggestions"><button type="button">Help me understand this dataset ↗</button><button type="button">What should I clean first? ↗</button><button type="button">How should I evaluate my model? ↗</button></div><p class="workspace-note">CSV preview is local to this browser. AI responses are not connected yet.</p>
+  </div>
+  <p class="upload-status" id="upload-status" role="status"></p>
+ </div>
+ <form class="hidden" id="upload-config" data-upload-url="{% url 'api-dataset-upload' selected.id %}">{% csrf_token %}</form>
+ {% else %}<div class="empty-workspace"><span class="studio-mark">IF</span><h1>Your space is ready</h1><p>Create a private project to start exploring your data, or join one through an invitation.</p><a class="primary-button" href="{% url 'project-new' %}">Create your first project</a></div>{% endif %}
+</section>{% endblock %}

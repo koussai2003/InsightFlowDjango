@@ -1,1 +1,0 @@
-# InsightFlow Django project package
